@@ -63,11 +63,20 @@ class SettingsNotifier extends Notifier<SettingsState> {
 
   /// Update user name
   Future<void> setUserName(String name) async {
+    // Check if first launch BEFORE updating state
+    final isFirstLaunch = state.isFirstLaunch;
+
     await _service.setUserName(name);
     state = state.copyWith(userName: name, isFirstLaunch: false);
 
-    // Broadcast name change to all peers
-    await ref.read(messageProvider.notifier).broadcastNameChange(name);
+    // Only broadcast name change if not first launch (services are running)
+    if (!isFirstLaunch) {
+      try {
+        await ref.read(messageProvider.notifier).broadcastNameChange(name);
+      } catch (e) {
+        print('Could not broadcast name change: $e');
+      }
+    }
   }
 
   /// Update retention days

@@ -17,6 +17,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isInitialized = false;
+  bool _isInitializing = false;
 
   @override
   void initState() {
@@ -32,6 +33,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _initializeServices() async {
+    // Prevent multiple simultaneous initializations
+    if (_isInitializing || _isInitialized) {
+      print('⚠️ Services already initializing or initialized, skipping...');
+      return;
+    }
+
+    _isInitializing = true;
     try {
       print('🚀 Starting services initialization...');
 
@@ -86,10 +94,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
 
       if (mounted) {
-        setState(() => _isInitialized = true);
+        setState(() {
+          _isInitialized = true;
+          _isInitializing = false;
+        });
+      } else {
+        _isInitializing = false;
       }
       print('✅ Services initialized successfully');
     } catch (e, stackTrace) {
+      _isInitializing = false;
       print('❌ Error initializing services: $e');
       print('Stack trace: $stackTrace');
       if (mounted) {
