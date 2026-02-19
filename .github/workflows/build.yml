@@ -2,126 +2,96 @@ name: Build
 
 on:
   workflow_call:
+    inputs:
+      version:
+        description: A build version to add to the name
+        type: string
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    env:
+      BUILD_NAME: OG-Messenger-Android-${{ inputs.version }}.apk
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: "zulu"
           java-version: "17"
           cache: "gradle"
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v6
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - run: mv build/app/outputs/flutter-apk/app-release.apk "$BUILD_NAME"
+      - uses: actions/upload-artifact@v6
         with:
-          name: OG-Messenger-Android.apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: build-android
+          path: ${{ env.BUILD_NAME }}
           retention-days: 7
 
   build-linux:
     runs-on: ubuntu-latest
+    env:
+      BUILD_NAME: OG-Messenger-Linux-${{ inputs.version }}.tar.gz
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Linux dependencies
-        run: |
+      - run: | # shell
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Linux
-        run: flutter build linux --release
-
-      - name: Create tar.gz
-        run: |
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - run: | # shell
           cd build/linux/x64/release/bundle
-          tar -czf ../../../../../OG-Messenger-Linux.tar.gz *
-
-      - name: Upload tar.gz
-        uses: actions/upload-artifact@v5
+          tar -czf "../../../../../$BUILD_NAME" *
+      - uses: actions/upload-artifact@v5
         with:
-          name: OG-Messenger-Linux.tar.gz
-          path: OG-Messenger-Linux.tar.gz
+          name: build-linux
+          path: ${{ env.BUILD_NAME }}
           retention-days: 7
 
   build-macos:
     runs-on: macos-latest
+    env:
+      BUILD_NAME: OG-Messenger-macOS-${{ inputs.version }}.app
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build macOS
-        run: flutter build macos --release
-
-      - name: Create ZIP
-        run: |
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - run: | # shell
           cd build/macos/Build/Products/Release
-          zip -r ../../../../../OG-Messenger-macOS.zip og_messenger.app
-
-      - name: Upload ZIP
-        uses: actions/upload-artifact@v6
+          mv "../../../../../$BUILD_NAME" og_messenger.app
+      - uses: actions/upload-artifact@v6
         with:
-          name: OG-Messenger-macOS.zip
-          path: OG-Messenger-macOS.zip
+          name: build-macos
+          path: ${{ env.BUILD_NAME }}
           retention-days: 7
 
   build-windows:
     runs-on: windows-latest
+    env:
+      BUILD_NAME: OG-Messenger-Windows-${{ inputs.version }}.zip
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Create ZIP
-        run: |
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath OG-Messenger-Windows.zip
-
-      - name: Upload ZIP
-        uses: actions/upload-artifact@v5
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
+      - uses: actions/upload-artifact@v5
         with:
-          name: OG-Messenger-Windows.zip
-          path: OG-Messenger-Windows.zip
+          name: build-windows
+          path: ${{ env.BUILD_NAME }}
           retention-days: 7
