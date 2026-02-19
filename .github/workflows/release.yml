@@ -5,16 +5,18 @@ on:
     branches:
       - main
 
-concurrency:
-  group: release
-
 jobs:
   release-test:
+    concurrency:
+      cancel-in-progress: true
+      group: release-test
     uses: ./.github/workflows/test.yml
 
   release-github:
     needs: release-test
     runs-on: ubuntu-latest
+    concurrency:
+      group: release
     permissions:
       contents: write
       issues: write
@@ -38,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: release
     steps:
       - uses: actions/download-artifact@v5
       - uses: softprops/action-gh-release@v2
