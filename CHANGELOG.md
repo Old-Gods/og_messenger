@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/Old-Gods/og_messenger/compare/v1.1.0...v1.2.0) (2026-02-19)
+
+
+### Features
+
+* add iOS build job to GitHub Actions workflow ([4bcb204](https://github.com/Old-Gods/og_messenger/commit/4bcb204302b84bf71c9b63f5e2db5bd6d08ee600))
+
+
+### Bug Fixes
+
+* prevent multiple initializations and improve user name broadcast logic ([42eaa73](https://github.com/Old-Gods/og_messenger/commit/42eaa735e7c98aa900d4d8e17d78a0a748a0b6fd))
+* update iOS and macOS build output format from .app to .zip ([38fd130](https://github.com/Old-Gods/og_messenger/commit/38fd1300a2ebcf218129c259685bae8f06e3dd04))
+* update user name handling to skip broadcast during initial setup ([d881ec7](https://github.com/Old-Gods/og_messenger/commit/d881ec76db77c73c172e97dda45c62e1117ef775))
+
 ## [1.1.0](https://github.com/Old-Gods/og_messenger/compare/v1.0.0...v1.1.0) (2026-02-19)
 
 
