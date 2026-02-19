@@ -34,7 +34,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _initializeServices() async {
     try {
       print('🚀 Starting services initialization...');
-      
+
       // Start TCP server
       final messageNotifier = ref.read(messageProvider.notifier);
       final serverStarted = await messageNotifier.startServer();
@@ -59,7 +59,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (tcpPort != null) {
         final discoveryNotifier = ref.read(discoveryProvider.notifier);
         final discoveryStarted = await discoveryNotifier.start(tcpPort);
-        
+
         if (discoveryStarted) {
           print('✅ UDP discovery started');
         } else {
@@ -223,45 +223,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: messageState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : messageState.messages.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No messages yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              discoveryState.peers.isEmpty
-                                  ? 'Waiting for peers to connect...'
-                                  : 'Start a conversation!',
-                              style: TextStyle(color: Colors.grey[500]),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 64,
+                          color: Colors.grey[400],
                         ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: messageState.messages.length,
-                        itemBuilder: (context, index) {
-                          final message = messageState.messages[index];
-                          return _MessageBubble(
-                            message: message,
-                            isOwn: message.senderId == settings.deviceId,
-                          );
-                        },
-                      ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No messages yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          discoveryState.peers.isEmpty
+                              ? 'Waiting for peers to connect...'
+                              : 'Start a conversation!',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(8),
+                    itemCount: messageState.messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messageState.messages[index];
+                      return _MessageBubble(
+                        message: message,
+                        isOwn: message.senderId == settings.deviceId,
+                      );
+                    },
+                  ),
           ),
 
           // Message input
@@ -273,7 +273,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 BoxShadow(
                   offset: const Offset(0, -2),
                   blurRadius: 4,
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                 ),
               ],
             ),
@@ -315,10 +315,7 @@ class _MessageBubble extends StatelessWidget {
   final dynamic message;
   final bool isOwn;
 
-  const _MessageBubble({
-    required this.message,
-    required this.isOwn,
-  });
+  const _MessageBubble({required this.message, required this.isOwn});
 
   @override
   Widget build(BuildContext context) {

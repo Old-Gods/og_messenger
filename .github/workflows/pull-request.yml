@@ -1,0 +1,16 @@
+name: pull-request
+
+on:
+  pull_request:
+
+concurrency:
+  cancel-in-progress: true
+  group: pr-${{ github.head_ref }}
+
+jobs:
+  pr-test:
+    uses: ./.github/workflows/test.yml
+
+  pr-build:
+    needs: pr-test
+    uses: ./.github/workflows/build.yml

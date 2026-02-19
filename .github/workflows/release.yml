@@ -1,0 +1,47 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release
+
+jobs:
+  release-github:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: simple
+
+  release-build:
+    needs: release-github
+    if: ${{ needs.release-github.outputs.release_created }}
+    uses: ./.github/workflows/build.yml
+
+  release-assets:
+    needs: [release-github, release-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-github.outputs.tag_name }}
+          files: |
+            OG-Messenger-Android.apk
+            OG-Messenger-Linux.tar.gz
+            OG-Messenger-macOS.zip
+            OG-Messenger-Windows.zip

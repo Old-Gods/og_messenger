@@ -5,19 +5,23 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:og_messenger/main.dart';
 
 void main() {
-  testWidgets('App launches with placeholder text', (
+  testWidgets('App launches and shows chat screen', (
     WidgetTester tester,
   ) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
 
-    // Verify that placeholder text is shown
-    expect(find.text('OG Messenger - Coming Soon'), findsOneWidget);
+    // Wait for the app to initialize
+    await tester.pumpAndSettle();
+
+    // Verify that the app bar title or message input field is present
+    expect(find.byType(TextField), findsWidgets);
   });
 }
