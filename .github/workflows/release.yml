@@ -9,7 +9,11 @@ concurrency:
   group: release
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   release-github:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
