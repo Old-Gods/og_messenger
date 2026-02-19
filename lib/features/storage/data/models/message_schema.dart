@@ -1,7 +1,7 @@
 /// SQLite database schema for storing messages
 class MessageSchema {
   static const String tableName = 'messages';
-  
+
   // Column names
   static const String columnId = 'id';
   static const String columnUuid = 'uuid';
@@ -27,7 +27,8 @@ class MessageSchema {
   });
 
   /// Create table SQL
-  static String get createTableSql => '''
+  static String get createTableSql =>
+      '''
     CREATE TABLE $tableName (
       $columnId INTEGER PRIMARY KEY AUTOINCREMENT,
       $columnUuid TEXT NOT NULL UNIQUE,
