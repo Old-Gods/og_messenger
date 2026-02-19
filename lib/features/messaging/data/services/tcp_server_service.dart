@@ -13,6 +13,8 @@ class TcpServerService {
       StreamController<Message>.broadcast();
   final StreamController<String> _errorController =
       StreamController<String>.broadcast();
+  final StreamController<Map<String, dynamic>> _syncRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -21,6 +23,10 @@ class TcpServerService {
 
   /// Stream of errors
   Stream<String> get errorStream => _errorController.stream;
+
+  /// Stream of sync requests
+  Stream<Map<String, dynamic>> get syncRequestStream =>
+      _syncRequestController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -32,16 +38,15 @@ class TcpServerService {
   Future<bool> start() async {
     if (_isRunning) return false;
 
-    for (int attempt = 0;
-        attempt < NetworkConstants.maxPortAttempts;
-        attempt++) {
+    for (
+      int attempt = 0;
+      attempt < NetworkConstants.maxPortAttempts;
+      attempt++
+    ) {
       final port = NetworkConstants.baseTcpPort + attempt;
 
       try {
-        _serverSocket = await ServerSocket.bind(
-          InternetAddress.anyIPv4,
-          port,
-        );
+        _serverSocket = await ServerSocket.bind(InternetAddress.anyIPv4, port);
 
         _actualPort = port;
         _isRunning = true;
@@ -67,7 +72,9 @@ class TcpServerService {
       }
     }
 
-    print('❌ Failed to bind TCP server after ${NetworkConstants.maxPortAttempts} attempts');
+    print(
+      '❌ Failed to bind TCP server after ${NetworkConstants.maxPortAttempts} attempts',
+    );
     _errorController.add(
       'Failed to bind TCP server after ${NetworkConstants.maxPortAttempts} attempts',
     );
@@ -101,8 +108,23 @@ class TcpServerService {
         if (line.trim().isEmpty) continue;
 
         final json = jsonDecode(line);
+
+        // Check if this is a sync request
+        if (json['type'] == 'sync_request') {
+          print('🔄 Received sync request');
+          _syncRequestController.add({
+            'address': socket.remoteAddress.address,
+            'port': json['tcp_port'] as int,
+            'since_timestamp': json['since_timestamp'] as int,
+          });
+          continue;
+        }
+
+        // Otherwise, it's a regular message
         final parsedMessage = Message.fromJson(json);
-        print('📨 Received message from ${parsedMessage.senderName}: ${parsedMessage.content}');
+        print(
+          '📨 Received message from ${parsedMessage.senderName}: ${parsedMessage.content}',
+        );
 
         // Validate message size
         final messageBytes = utf8.encode(line);
@@ -121,7 +143,11 @@ class TcpServerService {
   }
 
   /// Send a message to a specific peer
-  Future<bool> sendMessage(String peerAddress, int peerPort, Message message) async {
+  Future<bool> sendMessage(
+    String peerAddress,
+    int peerPort,
+    Message message,
+  ) async {
     try {
       final messageJson = jsonEncode(message.toJson());
       final messageBytes = utf8.encode(messageJson);
@@ -145,7 +171,41 @@ class TcpServerService {
       return true;
     } catch (e) {
       print('❌ Failed to send message to $peerAddress:$peerPort: $e');
-      _errorController.add('Failed to send message to $peerAddress:$peerPort: $e');
+      _errorController.add(
+        'Failed to send message to $peerAddress:$peerPort: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Send a sync request to a peer
+  Future<bool> sendSyncRequest(
+    String peerAddress,
+    int peerPort,
+    String deviceId,
+    int sinceTimestamp,
+  ) async {
+    try {
+      final request = {
+        'type': 'sync_request',
+        'device_id': deviceId,
+        'tcp_port': _actualPort,
+        'since_timestamp': sinceTimestamp,
+      };
+
+      final requestJson = jsonEncode(request);
+      print('📤 Sending sync request to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$requestJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Sync request sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send sync request to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send sync request: $e');
       return false;
     }
   }
@@ -213,5 +273,6 @@ class TcpServerService {
     stop();
     _messageController.close();
     _errorController.close();
+    _syncRequestController.close();
   }
 }

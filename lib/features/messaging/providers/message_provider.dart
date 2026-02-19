@@ -36,6 +36,8 @@ class MessageState {
 class MessageNotifier extends Notifier<MessageState> {
   late MessageRepository _repository;
   late TcpServerService _tcpServer;
+  ProviderSubscription? _peerSubscription;
+  final Set<String> _syncedPeers = {};
 
   @override
   MessageState build() {
@@ -45,6 +47,12 @@ class MessageNotifier extends Notifier<MessageState> {
     // Listen to incoming messages
     _tcpServer.messageStream.listen(_handleIncomingMessage);
     _tcpServer.errorStream.listen(_handleError);
+    _tcpServer.syncRequestStream.listen(_handleSyncRequest);
+
+    // Listen to peer discoveries for auto-sync
+    _peerSubscription = ref.listen(discoveryProvider, (previous, next) {
+      _handlePeerChanges(previous?.peers ?? {}, next.peers);
+    });
 
     // Schedule async load after build completes
     Future.microtask(() => loadMessages());
@@ -61,8 +69,10 @@ class MessageNotifier extends Notifier<MessageState> {
       final deviceId = settings.deviceId ?? '';
       final messages = await _repository.getAllMessages(deviceId);
 
+      print('📚 Loaded ${messages.length} messages from database');
       state = MessageState(messages: messages, isLoading: false);
     } catch (e) {
+      print('❌ Failed to load messages: $e');
       state = MessageState(
         messages: state.messages,
         isLoading: false,
@@ -77,6 +87,22 @@ class MessageNotifier extends Notifier<MessageState> {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
 
+      // Check for duplicates (same UUID and sender)
+      final isDuplicate = state.messages.any(
+        (m) => m.uuid == message.uuid && m.senderId == message.senderId,
+      );
+
+      if (isDuplicate) {
+        print(
+          '⚠️ Skipping duplicate message: "${message.content}" from ${message.senderName}',
+        );
+        return;
+      }
+
+      print(
+        '💾 Saving new message: "${message.content}" from ${message.senderName}',
+      );
+
       // Save to database
       await _repository.saveMessage(message, deviceId);
 
@@ -87,6 +113,7 @@ class MessageNotifier extends Notifier<MessageState> {
       );
       state = state.copyWith(messages: updatedMessages);
     } catch (e) {
+      print('❌ Failed to save message: $e');
       state = state.copyWith(error: 'Failed to save message: $e');
     }
   }
@@ -94,6 +121,115 @@ class MessageNotifier extends Notifier<MessageState> {
   /// Handle TCP server error
   void _handleError(String error) {
     state = state.copyWith(error: error);
+  }
+
+  /// Handle peer changes - sync with new peers
+  Future<void> _handlePeerChanges(
+    Map<String, dynamic> oldPeers,
+    Map<String, dynamic> newPeers,
+  ) async {
+    // Find newly discovered peers
+    for (final entry in newPeers.entries) {
+      final peerId = entry.key;
+      final peer = entry.value;
+
+      // Skip if already synced
+      if (_syncedPeers.contains(peerId)) continue;
+
+      // Skip if peer existed before
+      if (oldPeers.containsKey(peerId)) continue;
+
+      print('🔄 New peer discovered: ${peer.deviceName}, requesting sync...');
+      _syncedPeers.add(peerId);
+
+      // Request message sync from new peer
+      await _requestSync(peer.ipAddress, peer.tcpPort);
+    }
+
+    // Remove synced peers that disconnected
+    _syncedPeers.removeWhere((id) => !newPeers.containsKey(id));
+  }
+
+  /// Request message sync from a peer
+  Future<void> _requestSync(String peerAddress, int peerPort) async {
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId;
+
+      if (deviceId == null) return;
+
+      // Request sync with timestamp 0 to get all messages
+      // The receiver will send all their messages and we'll deduplicate
+      print('📊 Requesting full sync (all messages)');
+      if (state.messages.isNotEmpty) {
+        print(
+          '   Our messages: ${state.messages.map((m) => '${m.timestampMicros}: "${m.content}"').join(', ')}',
+        );
+      }
+
+      await _tcpServer.sendSyncRequest(
+        peerAddress,
+        peerPort,
+        deviceId,
+        0, // Request all messages
+      );
+
+      print('✅ Sync request sent to $peerAddress:$peerPort');
+    } catch (e) {
+      print('❌ Failed to request sync: $e');
+    }
+  }
+
+  /// Handle sync request from a peer
+  Future<void> _handleSyncRequest(Map<String, dynamic> request) async {
+    try {
+      final peerAddress = request['address'] as String;
+      final peerPort = request['port'] as int;
+      final sinceTimestamp = request['since_timestamp'] as int;
+
+      print(
+        '🔄 Received sync request from $peerAddress:$peerPort (since: $sinceTimestamp)',
+      );
+
+      // Ensure messages are loaded
+      if (state.isLoading) {
+        print('⏳ Messages still loading, waiting...');
+        await loadMessages();
+      }
+
+      print('📊 Current state has ${state.messages.length} messages');
+
+      // Get messages newer than the requested timestamp
+      final messagesToSync = state.messages
+          .where((m) => m.timestampMicros > sinceTimestamp)
+          .toList();
+
+      if (state.messages.isNotEmpty) {
+        print(
+          '   All message timestamps: ${state.messages.map((m) => m.timestampMicros).join(', ')}',
+        );
+        print('   Requested since: $sinceTimestamp');
+        print('   Messages to sync: ${messagesToSync.length}');
+      }
+
+      print('📤 Sending ${messagesToSync.length} messages for sync');
+
+      if (messagesToSync.isNotEmpty) {
+        print(
+          '   Timestamp range: ${messagesToSync.first.timestampMicros} to ${messagesToSync.last.timestampMicros}',
+        );
+      }
+
+      // Send each message
+      for (final message in messagesToSync) {
+        print('   Syncing: "${message.content}" (${message.timestampMicros})');
+        await _tcpServer.sendMessage(peerAddress, peerPort, message);
+      }
+
+      print('✅ Sync completed with $peerAddress:$peerPort');
+    } catch (e) {
+      print('❌ Failed to handle sync request: $e');
+    }
   }
 
   /// Send a message to all peers
@@ -202,6 +338,7 @@ class MessageNotifier extends Notifier<MessageState> {
 
   /// Stop TCP server
   Future<void> stopServer() async {
+    _peerSubscription?.close();
     await _tcpServer.stop();
   }
 
