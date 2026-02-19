@@ -15,6 +15,8 @@ class TcpServerService {
       StreamController<String>.broadcast();
   final StreamController<Map<String, dynamic>> _syncRequestController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _nameChangeController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -27,6 +29,10 @@ class TcpServerService {
   /// Stream of sync requests
   Stream<Map<String, dynamic>> get syncRequestStream =>
       _syncRequestController.stream;
+
+  /// Stream of name change notifications
+  Stream<Map<String, dynamic>> get nameChangeStream =>
+      _nameChangeController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -116,6 +122,16 @@ class TcpServerService {
             'address': socket.remoteAddress.address,
             'port': json['tcp_port'] as int,
             'since_timestamp': json['since_timestamp'] as int,
+          });
+          continue;
+        }
+
+        // Check if this is a name change notification
+        if (json['type'] == 'name_change') {
+          print('👤 Received name change notification');
+          _nameChangeController.add({
+            'device_id': json['device_id'] as String,
+            'new_name': json['new_name'] as String,
           });
           continue;
         }
@@ -210,6 +226,37 @@ class TcpServerService {
     }
   }
 
+  /// Send a name change notification to a peer
+  Future<bool> sendNameChange(
+    String peerAddress,
+    int peerPort,
+    String deviceId,
+    String newName,
+  ) async {
+    try {
+      final notification = {
+        'type': 'name_change',
+        'device_id': deviceId,
+        'new_name': newName,
+      };
+
+      final notificationJson = jsonEncode(notification);
+      print('📤 Sending name change to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$notificationJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Name change sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send name change to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send name change: $e');
+      return false;
+    }
+  }
+
   /// Broadcast a message to all connected peers
   Future<void> broadcastMessage(Message message) async {
     final messageJson = jsonEncode(message.toJson());
@@ -274,5 +321,6 @@ class TcpServerService {
     _messageController.close();
     _errorController.close();
     _syncRequestController.close();
+    _nameChangeController.close();
   }
 }

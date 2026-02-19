@@ -149,6 +149,17 @@ class DatabaseService {
     return await db.delete(MessageSchema.tableName);
   }
 
+  /// Update sender name for all messages from a specific sender
+  Future<int> updateSenderName(String senderId, String newName) async {
+    final db = await database;
+    return await db.update(
+      MessageSchema.tableName,
+      {MessageSchema.columnSenderName: newName},
+      where: '${MessageSchema.columnSenderId} = ?',
+      whereArgs: [senderId],
+    );
+  }
+
   /// Close the database
   Future<void> close() async {
     final db = await database;

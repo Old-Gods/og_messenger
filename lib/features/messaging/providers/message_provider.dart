@@ -48,6 +48,7 @@ class MessageNotifier extends Notifier<MessageState> {
     _tcpServer.messageStream.listen(_handleIncomingMessage);
     _tcpServer.errorStream.listen(_handleError);
     _tcpServer.syncRequestStream.listen(_handleSyncRequest);
+    _tcpServer.nameChangeStream.listen(_handleNameChange);
 
     // Listen to peer discoveries for auto-sync
     _peerSubscription = ref.listen(discoveryProvider, (previous, next) {
@@ -229,6 +230,59 @@ class MessageNotifier extends Notifier<MessageState> {
       print('✅ Sync completed with $peerAddress:$peerPort');
     } catch (e) {
       print('❌ Failed to handle sync request: $e');
+    }
+  }
+
+  /// Handle name change notification from a peer
+  Future<void> _handleNameChange(Map<String, dynamic> notification) async {
+    try {
+      final deviceId = notification['device_id'] as String;
+      final newName = notification['new_name'] as String;
+
+      print('👤 Processing name change: $deviceId → "$newName"');
+
+      // Update all messages from this sender in database
+      final updatedCount = await _repository.updateSenderName(
+        deviceId,
+        newName,
+      );
+      print('✅ Updated $updatedCount messages with new name');
+
+      // Reload messages to reflect the change in UI
+      await loadMessages();
+    } catch (e) {
+      print('❌ Failed to handle name change: $e');
+    }
+  }
+
+  /// Broadcast name change to all peers
+  Future<void> broadcastNameChange(String newName) async {
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId;
+
+      if (deviceId == null) return;
+
+      // Get all discovered peers
+      final discoveryState = ref.read(discoveryProvider);
+      final peers = discoveryState.peers.values;
+
+      print(
+        '📢 Broadcasting name change "$newName" to ${peers.length} peer(s)',
+      );
+
+      for (final peer in peers) {
+        await _tcpServer.sendNameChange(
+          peer.ipAddress,
+          peer.tcpPort,
+          deviceId,
+          newName,
+        );
+      }
+
+      print('✅ Name change broadcasted to all peers');
+    } catch (e) {
+      print('❌ Failed to broadcast name change: $e');
     }
   }
 

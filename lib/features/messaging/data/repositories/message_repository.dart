@@ -102,4 +102,9 @@ class MessageRepository {
   Future<void> clearAllMessages() async {
     await _database.clearAllMessages();
   }
+
+  /// Update sender name for all messages from a specific sender
+  Future<int> updateSenderName(String senderId, String newName) async {
+    return await _database.updateSenderName(senderId, newName);
+  }
 }

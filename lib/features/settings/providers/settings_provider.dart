@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/settings_service.dart';
+import '../../messaging/providers/message_provider.dart';
 
 /// Settings state model
 class SettingsState {
@@ -64,6 +65,9 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setUserName(String name) async {
     await _service.setUserName(name);
     state = state.copyWith(userName: name, isFirstLaunch: false);
+
+    // Broadcast name change to all peers
+    await ref.read(messageProvider.notifier).broadcastNameChange(name);
   }
 
   /// Update retention days
