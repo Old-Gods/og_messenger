@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.0](https://github.com/Old-Gods/og_messenger/compare/v1.2.0...v1.3.0) (2026-02-19)
+
+
+### Features
+
+* add notification for incoming messages ([42af111](https://github.com/Old-Gods/og_messenger/commit/42af11128a4f184b605e34781e83f27675cb964d))
+* enhance notification handling and app lifecycle management ([daa1fb3](https://github.com/Old-Gods/og_messenger/commit/daa1fb328a1268c2f3d33a350c5d4945cbd68ca1))
+* implement auto-scrolling for new messages and after sending ([56ed176](https://github.com/Old-Gods/og_messenger/commit/56ed176e44751b2d5d183882ab12845032b85293))
+* integrate package_info_plus for version display and message retention settings ([08b2103](https://github.com/Old-Gods/og_messenger/commit/08b210311d1fb4c8af87a825ca02dc786b014964))
+
 ## [1.2.0](https://github.com/Old-Gods/og_messenger/compare/v1.1.0...v1.2.0) (2026-02-19)
 
 
