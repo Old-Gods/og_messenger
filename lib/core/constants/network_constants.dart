@@ -12,7 +12,7 @@ class NetworkConstants {
 
   // Timing Configuration
   static const Duration discoveryBeaconInterval = Duration(seconds: 3);
-  static const Duration peerTimeout = Duration(seconds: 30);
+  static const Duration peerTimeout = Duration(seconds: 7);
   static const Duration reconnectDelay = Duration(seconds: 5);
   static const Duration tcpHeartbeatInterval = Duration(seconds: 30);
 
