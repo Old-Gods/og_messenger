@@ -36,7 +36,7 @@ jobs:
   build-ios:
     runs-on: macos-latest
     env:
-      BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.app
+      BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.zip
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
@@ -47,7 +47,7 @@ jobs:
       - run: flutter build ios --release --no-codesign
       - run: | # shell
           cd build/ios/iphoneos
-          mv "../../../$BUILD_NAME" Runner.app
+          zip -r "../../../$BUILD_NAME" Runner.app
       - uses: actions/upload-artifact@v6
         with:
           name: build-ios
@@ -81,7 +81,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     env:
-      BUILD_NAME: OG-Messenger-macOS-${{ inputs.version }}.app
+      BUILD_NAME: OG-Messenger-macOS-${{ inputs.version }}.zip
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
@@ -92,7 +92,7 @@ jobs:
       - run: flutter build macos --release
       - run: | # shell
           cd build/macos/Build/Products/Release
-          mv "../../../../../$BUILD_NAME" og_messenger.app
+          zip -r "../../../../../$BUILD_NAME" og_messenger.app
       - uses: actions/upload-artifact@v6
         with:
           name: build-macos
