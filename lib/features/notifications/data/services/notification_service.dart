@@ -30,9 +30,9 @@ class NotificationService {
 
     // macOS initialization settings
     const macosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
 
     const initializationSettings = InitializationSettings(

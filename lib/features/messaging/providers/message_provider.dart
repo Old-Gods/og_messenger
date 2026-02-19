@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -39,6 +40,7 @@ class MessageNotifier extends Notifier<MessageState> {
   late TcpServerService _tcpServer;
   ProviderSubscription? _peerSubscription;
   final Set<String> _syncedPeers = {};
+  bool _isAppInForeground = true;
 
   @override
   MessageState build() {
@@ -60,6 +62,11 @@ class MessageNotifier extends Notifier<MessageState> {
     Future.microtask(() => loadMessages());
 
     return const MessageState();
+  }
+
+  /// Update app foreground state
+  void setAppInForeground(bool inForeground) {
+    _isAppInForeground = inForeground;
   }
 
   /// Load all messages from database
@@ -115,16 +122,20 @@ class MessageNotifier extends Notifier<MessageState> {
       );
       state = state.copyWith(messages: updatedMessages);
 
-      // Show notification for incoming message
-      try {
-        await NotificationService.instance.showMessageNotification(
-          senderName: message.senderName,
-          messageContent: message.content,
-          messageId: message.uuid,
-        );
-        print('🔔 Notification shown for message from ${message.senderName}');
-      } catch (e) {
-        print('⚠️ Failed to show notification: $e');
+      // Show notification only if app is in background
+      if (!_isAppInForeground) {
+        try {
+          await NotificationService.instance.showMessageNotification(
+            senderName: message.senderName,
+            messageContent: message.content,
+            messageId: message.uuid,
+          );
+          print('🔔 Notification shown for message from ${message.senderName}');
+        } catch (e) {
+          print('⚠️ Failed to show notification: $e');
+        }
+      } else {
+        print('📱 App in foreground, skipping notification');
       }
     } catch (e) {
       print('❌ Failed to save message: $e');
