@@ -28,12 +28,12 @@ class SettingsService {
 
     // Check if device ID already exists
     String? deviceId = _prefs!.getString(_keyDeviceId);
-    
+
     if (deviceId == null || deviceId.isEmpty) {
       // Generate device ID from hardware identifiers
       deviceId = await _getHardwareDeviceId();
       await _prefs!.setString(_keyDeviceId, deviceId);
-      
+
       final isFirstLaunch = _prefs!.getBool(_keyFirstLaunch) ?? true;
       if (isFirstLaunch) {
         await _prefs!.setBool(_keyFirstLaunch, false);
@@ -46,7 +46,7 @@ class SettingsService {
   /// Get hardware-based device identifier that persists across app updates
   Future<String> _getHardwareDeviceId() async {
     final deviceInfo = DeviceInfoPlugin();
-    
+
     try {
       if (Platform.isAndroid) {
         final androidInfo = await deviceInfo.androidInfo;
@@ -72,11 +72,11 @@ class SettingsService {
     } catch (e) {
       print('❌ Failed to get hardware device ID: $e');
     }
-    
+
     // Fallback to UUID if hardware ID unavailable
     return _generateFallbackId();
   }
-  
+
   /// Generate fallback UUID if hardware ID is unavailable
   String _generateFallbackId() {
     const uuid = Uuid();
