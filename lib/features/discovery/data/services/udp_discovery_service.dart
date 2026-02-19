@@ -195,13 +195,11 @@ class UdpDiscoveryService {
       final beaconJson = jsonEncode(beacon.toJson());
       final beaconBytes = utf8.encode(beaconJson);
 
-      print('📡 Broadcasting beacon: $_deviceName (port $_tcpPort)');
-      final sent = _udpSocket!.send(
+      _udpSocket!.send(
         beaconBytes,
         InternetAddress(NetworkConstants.multicastAddress),
         NetworkConstants.multicastPort,
       );
-      print('✅ Beacon sent successfully ($sent bytes)');
     } catch (e) {
       print('❌ Failed to broadcast beacon: $e');
       _errorController.add('Failed to broadcast beacon: $e');
@@ -222,10 +220,6 @@ class UdpDiscoveryService {
   void _handleBeacon(Datagram datagram) {
     try {
       final message = utf8.decode(datagram.data);
-      print(
-        '📥 Received raw beacon from ${datagram.address.address}: $message',
-      );
-
       final json = jsonDecode(message) as Map<String, dynamic>;
       final peer = Peer.fromJson(json);
 
