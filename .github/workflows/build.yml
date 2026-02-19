@@ -5,6 +5,7 @@ on:
     inputs:
       version:
         description: A build version to add to the name
+        required: true
         type: string
 
 jobs:

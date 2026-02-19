@@ -24,6 +24,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -34,6 +35,8 @@ jobs:
     needs: release-github
     if: ${{ needs.release-github.outputs.release_created }}
     uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.release-github.outputs.version }}
 
   release-assets:
     needs: [release-github, release-build]
@@ -41,14 +44,13 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: release-assets-${{ needs.release-github.outputs.tag_name }}
+      group: release-assets-${{ needs.release-github.outputs.version }}
     steps:
       - uses: actions/download-artifact@v5
+        with:
+          path: .
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-github.outputs.tag_name }}
-          files: |
-            OG-Messenger-Android.apk/OG-Messenger-Android.apk
-            OG-Messenger-Linux.tar.gz/OG-Messenger-Linux.tar.gz
-            OG-Messenger-macOS.zip/OG-Messenger-macOS.zip
-            OG-Messenger-Windows.zip/OG-Messenger-Windows.zip
+          files: ./*

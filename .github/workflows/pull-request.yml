@@ -14,3 +14,5 @@ jobs:
   pr-build:
     needs: pr-test
     uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.head_ref }}
