@@ -48,7 +48,7 @@ jobs:
         with:
           tag_name: ${{ needs.release-github.outputs.tag_name }}
           files: |
-            OG-Messenger-Android.apk
-            OG-Messenger-Linux.tar.gz
-            OG-Messenger-macOS.zip
-            OG-Messenger-Windows.zip
+            OG-Messenger-Android.apk/OG-Messenger-Android.apk
+            OG-Messenger-Linux.tar.gz/OG-Messenger-Linux.tar.gz
+            OG-Messenger-macOS.zip/OG-Messenger-macOS.zip
+            OG-Messenger-Windows.zip/OG-Messenger-Windows.zip
