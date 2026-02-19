@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../discovery/providers/discovery_provider.dart';
+import '../../notifications/data/services/notification_service.dart';
 import '../domain/entities/message.dart';
 import '../data/repositories/message_repository.dart';
 import '../data/services/tcp_server_service.dart';
@@ -113,6 +114,18 @@ class MessageNotifier extends Notifier<MessageState> {
         (a, b) => a.timestampMicros.compareTo(b.timestampMicros),
       );
       state = state.copyWith(messages: updatedMessages);
+
+      // Show notification for incoming message
+      try {
+        await NotificationService.instance.showMessageNotification(
+          senderName: message.senderName,
+          messageContent: message.content,
+          messageId: message.uuid,
+        );
+        print('🔔 Notification shown for message from ${message.senderName}');
+      } catch (e) {
+        print('⚠️ Failed to show notification: $e');
+      }
     } catch (e) {
       print('❌ Failed to save message: $e');
       state = state.copyWith(error: 'Failed to save message: $e');
