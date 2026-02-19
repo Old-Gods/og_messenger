@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+concurrency:
+  group: release
+
 jobs:
   release-github:
     runs-on: ubuntu-latest
@@ -12,8 +15,6 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    concurrency:
-      group: release-github
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -34,20 +35,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency:
-      group: release-assets
-    strategy:
-      max-parallel: 1
-      matrix:
-        asset:
-          - OG-Messenger-Android.apk
-          - OG-Messenger-Linux.tar.gz
-          - OG-Messenger-macOS.zip
-          - OG-Messenger-Windows.zip
     steps:
       - uses: actions/download-artifact@v5
-        name: ${{ matrix.asset }}
+        name: OG-Messenger-Android.apk
+      - uses: actions/download-artifact@v5
+        name: OG-Messenger-Linux.tar.gz
+      - uses: actions/download-artifact@v5
+        name: OG-Messenger-macOS.zip
+      - uses: actions/download-artifact@v5
+        name: OG-Messenger-Windows.zip
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-github.outputs.tag_name }}
-          files: ${{ matrix.asset }}
+          files: |
+            OG-Messenger-Android.apk
+            OG-Messenger-Linux.tar.gz
+            OG-Messenger-macOS.zip
+            OG-Messenger-Windows.zip
