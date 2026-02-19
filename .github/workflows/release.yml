@@ -13,7 +13,7 @@ jobs:
     uses: ./.github/workflows/test.yml
 
   release-github:
-    needs: test
+    needs: release-test
     runs-on: ubuntu-latest
     permissions:
       contents: write
