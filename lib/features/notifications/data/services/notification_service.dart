@@ -17,7 +17,9 @@ class NotificationService {
     if (_initialized) return;
 
     // Android initialization settings
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
 
     // iOS initialization settings
     const iosSettings = DarwinInitializationSettings(
@@ -54,20 +56,19 @@ class NotificationService {
     if (Platform.isIOS || Platform.isMacOS) {
       final result = await _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
       _permissionGranted = result ?? false;
       return _permissionGranted;
     } else if (Platform.isAndroid) {
       final androidImplementation = _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
-      final granted = await androidImplementation?.requestNotificationsPermission();
+      final granted = await androidImplementation
+          ?.requestNotificationsPermission();
       _permissionGranted = granted ?? false;
       return _permissionGranted;
     }

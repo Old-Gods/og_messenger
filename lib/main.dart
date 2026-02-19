@@ -13,11 +13,7 @@ void main() async {
   await NotificationService.instance.initialize();
   await NotificationService.instance.requestPermissions();
 
-  runApp(
-    const ProviderScope(
-      child: OGMessengerApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: OGMessengerApp()));
 }
 
 class OGMessengerApp extends ConsumerStatefulWidget {

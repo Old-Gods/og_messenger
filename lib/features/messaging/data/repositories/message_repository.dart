@@ -7,7 +7,7 @@ class MessageRepository {
   final DatabaseService _database;
 
   MessageRepository({DatabaseService? database})
-      : _database = database ?? DatabaseService.instance;
+    : _database = database ?? DatabaseService.instance;
 
   /// Save a message to the database
   Future<void> saveMessage(Message message, String localDeviceId) async {
@@ -65,8 +65,7 @@ class MessageRepository {
     int timestampMicros,
     String localDeviceId,
   ) async {
-    final schemas =
-        await _database.getMessagesAfterTimestamp(timestampMicros);
+    final schemas = await _database.getMessagesAfterTimestamp(timestampMicros);
     return schemas.map((schema) {
       return Message(
         uuid: schema.uuid,

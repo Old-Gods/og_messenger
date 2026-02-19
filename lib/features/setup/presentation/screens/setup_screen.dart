@@ -27,9 +27,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(settingsProvider.notifier).setUserName(
-            _nameController.text.trim(),
-          );
+      await ref
+          .read(settingsProvider.notifier)
+          .setUserName(_nameController.text.trim());
 
       if (mounted) {
         // Navigate to chat screen
@@ -37,9 +37,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save name: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save name: $e')));
       }
     } finally {
       if (mounted) {

@@ -82,7 +82,8 @@ class DatabaseService {
 
   /// Get messages after a specific timestamp
   Future<List<MessageSchema>> getMessagesAfterTimestamp(
-      int timestampMicros) async {
+    int timestampMicros,
+  ) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       MessageSchema.tableName,
@@ -111,8 +112,7 @@ class DatabaseService {
   /// Delete messages older than the retention period
   Future<int> deleteExpiredMessages() async {
     final db = await database;
-    final retentionMicros =
-        AppConstants.retentionDays * 24 * 60 * 60 * 1000000;
+    final retentionMicros = AppConstants.retentionDays * 24 * 60 * 60 * 1000000;
     final cutoffTimestamp =
         DateTime.now().microsecondsSinceEpoch - retentionMicros;
 
@@ -137,8 +137,9 @@ class DatabaseService {
   /// Get total message count
   Future<int> getMessageCount() async {
     final db = await database;
-    final result =
-        await db.rawQuery('SELECT COUNT(*) as count FROM ${MessageSchema.tableName}');
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${MessageSchema.tableName}',
+    );
     return Sqflite.firstIntValue(result) ?? 0;
   }
 

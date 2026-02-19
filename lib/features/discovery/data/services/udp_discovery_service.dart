@@ -51,7 +51,7 @@ class UdpDiscoveryService {
       print('   Device ID: $deviceId');
       print('   Device Name: $deviceName');
       print('   TCP Port: $tcpPort');
-      
+
       // List available network interfaces
       final interfaces = await NetworkInterface.list(
         includeLoopback: false,
@@ -61,31 +61,34 @@ class UdpDiscoveryService {
       print('📶 Available network interfaces:');
       NetworkInterface? selectedInterface;
       InternetAddress? selectedAddress;
-      
+
       for (var interface in interfaces) {
         for (var addr in interface.addresses) {
           print('   ${interface.name}: ${addr.address}');
-          
+
           // Skip VPN tunnels and other virtual interfaces
-          if (interface.name.startsWith('utun') || 
+          if (interface.name.startsWith('utun') ||
               interface.name.startsWith('ipsec') ||
               interface.name.startsWith('tap') ||
               interface.name.startsWith('tun')) {
             continue;
           }
-          
+
           // Prefer WiFi (en0) or Ethernet (en1) interfaces
           // And prefer 192.168.x.x or 10.x.x.x networks (common LAN ranges)
           final ip = addr.address;
-          if ((interface.name == 'en0' || interface.name == 'en1' || 
-               interface.name == 'wlan0' || interface.name == 'eth0') &&
-              (ip.startsWith('192.168.') || ip.startsWith('10.') || 
-               ip.startsWith('172.'))) {
+          if ((interface.name == 'en0' ||
+                  interface.name == 'en1' ||
+                  interface.name == 'wlan0' ||
+                  interface.name == 'eth0') &&
+              (ip.startsWith('192.168.') ||
+                  ip.startsWith('10.') ||
+                  ip.startsWith('172.'))) {
             selectedInterface = interface;
             selectedAddress = addr;
             break;
           }
-          
+
           // Fallback: use any non-VPN interface
           if (selectedInterface == null) {
             selectedInterface = interface;
@@ -94,13 +97,15 @@ class UdpDiscoveryService {
         }
         if (selectedInterface != null && selectedAddress != null) break;
       }
-      
+
       if (selectedInterface != null && selectedAddress != null) {
-        print('✅ Selected interface: ${selectedInterface.name} (${selectedAddress.address})');
+        print(
+          '✅ Selected interface: ${selectedInterface.name} (${selectedAddress.address})',
+        );
       } else {
         print('⚠️ No suitable network interface found, using default');
       }
-      
+
       // Acquire multicast lock on Android
       await MulticastLockService.instance.acquireLock();
       print('✅ Multicast lock acquired');
@@ -115,15 +120,19 @@ class UdpDiscoveryService {
       print('✅ UDP socket bound to 0.0.0.0:${NetworkConstants.multicastPort}');
 
       // Join multicast group on specific interface
-      final multicastAddress = InternetAddress(NetworkConstants.multicastAddress);
+      final multicastAddress = InternetAddress(
+        NetworkConstants.multicastAddress,
+      );
       if (selectedInterface != null) {
         _udpSocket!.joinMulticast(multicastAddress, selectedInterface);
-        print('✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}');
+        print(
+          '✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}',
+        );
       } else {
         _udpSocket!.joinMulticast(multicastAddress);
         print('✅ Joined multicast group ${NetworkConstants.multicastAddress}');
       }
-      
+
       // Configure multicast settings
       _udpSocket!.multicastLoopback = true; // Enable to help with debugging
       _udpSocket!.multicastHops = 2; // TTL for multicast packets
@@ -132,9 +141,9 @@ class UdpDiscoveryService {
 
       // Listen for incoming beacons
       _udpSocket!.listen(
-            _handleRawDatagram,
-            onError: (error) => _errorController.add('UDP error: $error'),
-          );
+        _handleRawDatagram,
+        onError: (error) => _errorController.add('UDP error: $error'),
+      );
 
       // Start broadcasting beacons
       _beaconTimer = Timer.periodic(
@@ -213,15 +222,19 @@ class UdpDiscoveryService {
   void _handleBeacon(Datagram datagram) {
     try {
       final message = utf8.decode(datagram.data);
-      print('📥 Received raw beacon from ${datagram.address.address}: $message');
-      
+      print(
+        '📥 Received raw beacon from ${datagram.address.address}: $message',
+      );
+
       final json = jsonDecode(message) as Map<String, dynamic>;
       final peer = Peer.fromJson(json);
 
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
 
-      print('📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}');
+      print(
+        '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
+      );
 
       // Update peer with actual IP address
       final updatedPeer = Peer(

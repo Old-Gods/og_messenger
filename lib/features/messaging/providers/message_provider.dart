@@ -82,7 +82,9 @@ class MessageNotifier extends Notifier<MessageState> {
 
       // Update state
       final updatedMessages = [...state.messages, message];
-      updatedMessages.sort((a, b) => a.timestampMicros.compareTo(b.timestampMicros));
+      updatedMessages.sort(
+        (a, b) => a.timestampMicros.compareTo(b.timestampMicros),
+      );
       state = state.copyWith(messages: updatedMessages);
     } catch (e) {
       state = state.copyWith(error: 'Failed to save message: $e');
@@ -130,13 +132,15 @@ class MessageNotifier extends Notifier<MessageState> {
 
       // Update local state
       final updatedMessages = [...state.messages, message];
-      updatedMessages.sort((a, b) => a.timestampMicros.compareTo(b.timestampMicros));
+      updatedMessages.sort(
+        (a, b) => a.timestampMicros.compareTo(b.timestampMicros),
+      );
       state = state.copyWith(messages: updatedMessages);
 
       // Send to all discovered peers
       final discoveryState = ref.read(discoveryProvider);
       final peers = discoveryState.peers.values;
-      
+
       print('👥 Discovered ${peers.length} peer(s)');
 
       if (peers.isEmpty) {
@@ -144,12 +148,10 @@ class MessageNotifier extends Notifier<MessageState> {
       }
 
       for (final peer in peers) {
-        print('   Sending to ${peer.deviceName} at ${peer.ipAddress}:${peer.tcpPort}');
-        await _tcpServer.sendMessage(
-          peer.ipAddress,
-          peer.tcpPort,
-          message,
+        print(
+          '   Sending to ${peer.deviceName} at ${peer.ipAddress}:${peer.tcpPort}',
         );
+        await _tcpServer.sendMessage(peer.ipAddress, peer.tcpPort, message);
       }
     } catch (e) {
       print('❌ Error sending message: $e');
@@ -162,8 +164,9 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       await _repository.deleteMessage(uuid, senderId);
 
-      final updatedMessages =
-          state.messages.where((m) => m.uuid != uuid || m.senderId != senderId).toList();
+      final updatedMessages = state.messages
+          .where((m) => m.uuid != uuid || m.senderId != senderId)
+          .toList();
       state = state.copyWith(messages: updatedMessages);
     } catch (e) {
       state = state.copyWith(error: 'Failed to delete message: $e');

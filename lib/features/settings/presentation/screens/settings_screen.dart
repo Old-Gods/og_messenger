@@ -49,9 +49,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update name: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update name: $e')));
       }
     } finally {
       if (mounted) {
@@ -85,9 +85,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true) {
       await ref.read(messageProvider.notifier).clearAllMessages();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All messages cleared')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('All messages cleared')));
       }
     }
   }
@@ -99,19 +99,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final messageState = ref.watch(messageProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           // User Information
           const ListTile(
             title: Text(
               'User Information',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
           Padding(
@@ -170,10 +165,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const ListTile(
             title: Text(
               'Network Status',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
           ListTile(
@@ -182,9 +174,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               color: discoveryState.isRunning ? Colors.green : Colors.red,
             ),
             title: const Text('Discovery Service'),
-            subtitle: Text(
-              discoveryState.isRunning ? 'Running' : 'Stopped',
-            ),
+            subtitle: Text(discoveryState.isRunning ? 'Running' : 'Stopped'),
           ),
           ListTile(
             leading: const Icon(Icons.people),
@@ -207,10 +197,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const ListTile(
             title: Text(
               'Storage',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
           ListTile(
@@ -241,10 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const ListTile(
             title: Text(
               'About',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
           const ListTile(
