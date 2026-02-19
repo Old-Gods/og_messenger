@@ -16,7 +16,7 @@ jobs:
     needs: release-test
     runs-on: ubuntu-latest
     concurrency:
-      group: release
+      group: release-github
     permissions:
       contents: write
       issues: write
@@ -41,7 +41,7 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: release
+      group: release-assets-${{ needs.release-github.outputs.tag_name }}
     steps:
       - uses: actions/download-artifact@v5
       - uses: softprops/action-gh-release@v2
