@@ -187,9 +187,6 @@ class TcpServerService {
       return true;
     } catch (e) {
       print('❌ Failed to send message to $peerAddress:$peerPort: $e');
-      _errorController.add(
-        'Failed to send message to $peerAddress:$peerPort: $e',
-      );
       return false;
     }
   }
