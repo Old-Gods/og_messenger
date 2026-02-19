@@ -9,7 +9,7 @@ concurrency:
   group: release
 
 jobs:
-  test:
+  release-test:
     uses: ./.github/workflows/test.yml
 
   release-github:
