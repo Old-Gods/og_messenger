@@ -1,3 +1,5 @@
+name: release
+
 on:
   push:
     branches:
@@ -10,6 +12,8 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    concurrency:
+      group: release-github
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -30,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: release-assets
     strategy:
       max-parallel: 1
       matrix:
