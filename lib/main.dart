@@ -4,6 +4,7 @@ import 'features/setup/presentation/screens/setup_screen.dart';
 import 'features/chat/presentation/screens/chat_screen.dart';
 import 'features/settings/presentation/screens/settings_screen.dart';
 import 'features/settings/providers/settings_provider.dart';
+import 'features/messaging/providers/message_provider.dart';
 import 'features/notifications/data/services/notification_service.dart';
 
 void main() async {
@@ -23,14 +24,30 @@ class OGMessengerApp extends ConsumerStatefulWidget {
   ConsumerState<OGMessengerApp> createState() => _OGMessengerAppState();
 }
 
-class _OGMessengerAppState extends ConsumerState<OGMessengerApp> {
+class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Initialize settings
     Future.microtask(() async {
       await ref.read(settingsProvider.notifier).initialize();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Update message provider with app state
+    final isInForeground = state == AppLifecycleState.resumed;
+    ref.read(messageProvider.notifier).setAppInForeground(isInForeground);
   }
 
   @override

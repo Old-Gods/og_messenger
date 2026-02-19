@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -16,12 +17,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _nameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  String _version = 'Loading...';
 
   @override
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
     _nameController.text = settings.userName ?? '';
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _version = packageInfo.version;
+      });
+    }
   }
 
   @override
@@ -56,6 +68,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _showRetentionDialog() async {
+    final settings = ref.read(settingsProvider);
+    final controller = TextEditingController(
+      text: settings.retentionDays.toString(),
+    );
+
+    final newDays = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Message Retention'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Days to keep messages',
+            helperText: 'Enter 0 for unlimited retention',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final days =
+                  int.tryParse(controller.text) ?? settings.retentionDays;
+              Navigator.of(context).pop(days);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (newDays != null && newDays != settings.retentionDays) {
+      await ref.read(settingsProvider.notifier).setRetentionDays(newDays);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Retention updated to $newDays days')),
+        );
       }
     }
   }
@@ -203,7 +263,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.storage),
             title: const Text('Message Retention'),
-            subtitle: Text('${settings.retentionDays} days'),
+            subtitle: Text(
+              settings.retentionDays == 0
+                  ? 'Unlimited (messages never deleted)'
+                  : '${settings.retentionDays} days',
+            ),
+            trailing: const Icon(Icons.edit),
+            onTap: _showRetentionDialog,
           ),
           ListTile(
             leading: const Icon(Icons.message),
@@ -231,10 +297,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
-          const ListTile(
-            leading: Icon(Icons.info),
-            title: Text('OG Messenger'),
-            subtitle: Text('Serverless LAN Messenger\nVersion 1.0.0'),
+          ListTile(
+            leading: const Icon(Icons.info),
+            title: const Text('OG Messenger'),
+            subtitle: Text('Serverless LAN Messenger\nVersion $_version'),
           ),
         ],
       ),

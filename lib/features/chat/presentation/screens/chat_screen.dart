@@ -18,11 +18,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   bool _isInitialized = false;
   bool _isInitializing = false;
+  int _previousMessageCount = 0;
 
   @override
   void initState() {
     super.initState();
     _initializeServices();
+    // Scroll to bottom after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
@@ -30,6 +33,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom({bool animate = true}) {
+    if (!_scrollController.hasClients) return;
+
+    if (animate) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
   }
 
   Future<void> _initializeServices() async {
@@ -138,14 +155,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.clear();
     await ref.read(messageProvider.notifier).sendMessage(content);
 
-    // Scroll to bottom
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+    // Scroll to bottom after sending
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
@@ -153,6 +164,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messageState = ref.watch(messageProvider);
     final discoveryState = ref.watch(discoveryProvider);
     final settings = ref.watch(settingsProvider);
+
+    // Auto-scroll when new messages arrive
+    if (messageState.messages.length != _previousMessageCount) {
+      _previousMessageCount = messageState.messages.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    }
 
     return Scaffold(
       appBar: AppBar(
