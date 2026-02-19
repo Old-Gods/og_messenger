@@ -13,7 +13,8 @@ class AppConstants {
   static const int defaultRetentionDays = 30;
   static const int minRetentionDays = 7;
   static const int maxRetentionDays = 90;
+  static const int retentionDays = 30;
 
   // Database
-  static const String databaseName = 'og_messenger';
+  static const String databaseName = 'og_messenger.db';
 }

@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 
 /// Service to manage Android multicast lock via platform channel
 class MulticastLockService {
+  static final MulticastLockService instance = MulticastLockService._();
+  
+  MulticastLockService._();
+  
   static const platform = MethodChannel(
     'com.ogmessenger.og_messenger/multicast',
   );
