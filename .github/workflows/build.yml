@@ -32,6 +32,25 @@ jobs:
           path: ${{ env.BUILD_NAME }}
           retention-days: 7
 
+  build-ios:
+    runs-on: macos-latest
+    env:
+      BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.ipa
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ipa --release --no-codesign
+      - run: mv build/ios/ipa/*.ipa "$BUILD_NAME"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: build-ios
+          path: ${{ env.BUILD_NAME }}
+          retention-days: 7
+
   build-linux:
     runs-on: ubuntu-latest
     env:
