@@ -29,12 +29,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     try {
       await ref
           .read(settingsProvider.notifier)
-          .setUserName(_nameController.text.trim());
+          .setUserName(_nameController.text.trim(), skipBroadcast: true);
 
-      if (mounted) {
-        // Navigate to chat screen
-        Navigator.of(context).pushReplacementNamed('/chat');
-      }
+      // Navigation handled automatically by main.dart when state changes
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

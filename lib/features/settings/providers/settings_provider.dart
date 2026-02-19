@@ -62,12 +62,18 @@ class SettingsNotifier extends Notifier<SettingsState> {
   }
 
   /// Update user name
-  Future<void> setUserName(String name) async {
+  Future<void> setUserName(String name, {bool skipBroadcast = false}) async {
     await _service.setUserName(name);
     state = state.copyWith(userName: name, isFirstLaunch: false);
 
-    // Broadcast name change to all peers
-    await ref.read(messageProvider.notifier).broadcastNameChange(name);
+    // Only broadcast name change if explicitly allowed (not during first setup)
+    if (!skipBroadcast) {
+      try {
+        await ref.read(messageProvider.notifier).broadcastNameChange(name);
+      } catch (e) {
+        print('Could not broadcast name change: $e');
+      }
+    }
   }
 
   /// Update retention days
