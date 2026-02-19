@@ -1,0 +1,10 @@
+on:
+  pull_request:
+
+jobs:
+  pr-test:
+    uses: ./.github/workflows/test.yml
+
+  pr-build:
+    needs: pr-test
+    uses: ./.github/workflows/build.yml
