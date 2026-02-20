@@ -27,7 +27,8 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --release
       - run: mv build/app/outputs/flutter-apk/app-release.apk "$BUILD_NAME"
-      - uses: actions/upload-artifact@v6
+      - if: github.actor != 'dependabot[bot]'
+        uses: actions/upload-artifact@v6
         with:
           name: build-android
           path: ${{ env.BUILD_NAME }}
@@ -48,7 +49,8 @@ jobs:
       - run: | # shell
           cd build/ios/iphoneos
           zip -r "../../../$BUILD_NAME" Runner.app
-      - uses: actions/upload-artifact@v6
+      - if: github.actor != 'dependabot[bot]'
+        uses: actions/upload-artifact@v6
         with:
           name: build-ios
           path: ${{ env.BUILD_NAME }}
@@ -72,7 +74,8 @@ jobs:
       - run: | # shell
           cd build/linux/x64/release/bundle
           tar -czf "../../../../../$BUILD_NAME" *
-      - uses: actions/upload-artifact@v5
+      - if: github.actor != 'dependabot[bot]'
+        uses: actions/upload-artifact@v6
         with:
           name: build-linux
           path: ${{ env.BUILD_NAME }}
@@ -93,7 +96,8 @@ jobs:
       - run: | # shell
           cd build/macos/Build/Products/Release
           zip -r "../../../../../$BUILD_NAME" og_messenger.app
-      - uses: actions/upload-artifact@v6
+      - if: github.actor != 'dependabot[bot]'
+        uses: actions/upload-artifact@v6
         with:
           name: build-macos
           path: ${{ env.BUILD_NAME }}
@@ -112,7 +116,8 @@ jobs:
       - run: flutter pub get
       - run: flutter build windows --release
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
-      - uses: actions/upload-artifact@v5
+      - if: github.actor != 'dependabot[bot]'
+        uses: actions/upload-artifact@v6
         with:
           name: build-windows
           path: ${{ env.BUILD_NAME }}
