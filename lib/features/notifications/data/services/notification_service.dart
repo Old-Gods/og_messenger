@@ -42,7 +42,7 @@ class NotificationService {
     );
 
     await _plugin.initialize(
-      initializationSettings,
+      settings: initializationSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
@@ -112,10 +112,10 @@ class NotificationService {
     );
 
     await _plugin.show(
-      messageId.hashCode, // Use message ID hash as notification ID
-      senderName,
-      messageContent,
-      notificationDetails,
+      id: messageId.hashCode, // Use message ID hash as notification ID
+      title: senderName,
+      body: messageContent,
+      notificationDetails: notificationDetails,
       payload: messageId,
     );
   }
@@ -133,7 +133,7 @@ class NotificationService {
 
   /// Cancel a specific notification
   Future<void> cancel(int id) async {
-    await _plugin.cancel(id);
+    await _plugin.cancel(id: id);
   }
 
   /// Check if notifications are enabled
