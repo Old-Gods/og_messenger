@@ -22,6 +22,7 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
+      body: ${{ steps.release.outputs.body }}
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
@@ -29,6 +30,7 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
+          skip-github-release: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
   release-build:
@@ -52,5 +54,6 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          body: ${{ needs.release-github.outputs.body }}
           tag_name: ${{ needs.release-github.outputs.tag_name }}
           files: ./*
