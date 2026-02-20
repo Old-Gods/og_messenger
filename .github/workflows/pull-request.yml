@@ -8,11 +8,21 @@ concurrency:
   group: pr-${{ github.head_ref }}
 
 jobs:
+  pr-prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+    steps:
+      - id: set-version
+        run: |
+          VERSION="${{ github.head_ref }}"
+          echo "version=${VERSION//\//-}" >> $GITHUB_OUTPUT
+
   pr-test:
     uses: ./.github/workflows/test.yml
 
   pr-build:
-    needs: pr-test
+    needs: [pr-prepare, pr-test]
     uses: ./.github/workflows/build.yml
     with:
-      version: ${{ github.head_ref }}
+      version: ${{ needs.pr-prepare.outputs.version }}
