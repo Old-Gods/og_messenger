@@ -15,9 +15,9 @@ dependencies:
   uuid: ^4.5.1
   shared_preferences: ^2.3.4
   flutter_local_notifications: ^20.1.0
-  json_annotation: ^4.9.0
-  package_info_plus: ^8.1.2
-  device_info_plus: ^11.2.0
+  json_annotation: ^4.11.0
+  package_info_plus: ^9.0.0
+  device_info_plus: ^12.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -33,11 +33,11 @@ flutter_launcher_icons:
   ios: true
   macos:
     generate: true
-    image_path: "images/og_messenger_icon.png"
+    image_path: "images/og_messenger_icon.dark.png"
   windows:
     generate: true
-    image_path: "images/og_messenger_icon.png"
+    image_path: "images/og_messenger_icon.dark.png"
   linux: true
-  image_path: "images/og_messenger_icon.png"
+  image_path: "images/og_messenger_icon.dark.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "images/og_messenger_icon.png"
+  adaptive_icon_foreground: "images/og_messenger_icon.dark.png"
