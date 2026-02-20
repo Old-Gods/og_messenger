@@ -38,11 +38,16 @@ flutter_launcher_icons:
   ios: true
   macos:
     generate: true
-    image_path: images/og_messenger_icon.dark.png
+    image_path: images/og_messenger_icon.png
   windows:
     generate: true
-    image_path: images/og_messenger_icon.dark.png
+    image_path: images/og_messenger_icon.png
   linux: true
-  image_path: images/og_messenger_icon.dark.png
+  image_path: images/og_messenger_icon.png
+  image_path_android: images/og_messenger_icon.png
+  image_path_ios: images/og_messenger_icon.png
   adaptive_icon_background: '#FFFFFF'
-  adaptive_icon_foreground: images/og_messenger_icon.dark.png
+  adaptive_icon_foreground: images/og_messenger_icon.png
+  # Android adaptive icons with light/dark theme support
+  adaptive_icon_foreground_light: images/og_messenger_icon.png
+  adaptive_icon_foreground_dark: images/og_messenger_icon.dark.png
