@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.5.0](https://github.com/Old-Gods/og_messenger/compare/v1.4.0...v1.5.0) (2026-02-20)
+
+
+### Features
+
+* **assets:** update app icons for all platforms with light/dark theme support ([1c013b8](https://github.com/Old-Gods/og_messenger/commit/1c013b8219a14fac0ac1690a67058b02c947027c))
+* **assets:** update app icons for light/dark theme support across platforms ([407bfd2](https://github.com/Old-Gods/og_messenger/commit/407bfd2c0e0d02d2ec2e58c91b60331fff546cce))
+* **security:** enhance password management with detailed logging and new password proposal handling ([6da2700](https://github.com/Old-Gods/og_messenger/commit/6da270047e32098959c5e2e7c9c0c538467f55ee))
+* **security:** enhance password proposal handling with detailed logging and automatic voting ([fc9a400](https://github.com/Old-Gods/og_messenger/commit/fc9a4003f0b41ef0ad16d3cec6372adba9f4c434))
+* **security:** implement password change proposals and voting mechanism ([373eeef](https://github.com/Old-Gods/og_messenger/commit/373eeef6b8c53b39735ca22665850ac06894311c))
+* **setup:** update app icons and add asset references for light and dark themes ([4d2213e](https://github.com/Old-Gods/og_messenger/commit/4d2213e10d0619c5ffb30dabf6f2ed5582cfc8a9))
+
+
+### Bug Fixes
+
+* **chat:** update color opacity handling in message bubble decoration ([bffe210](https://github.com/Old-Gods/og_messenger/commit/bffe2102fac5d7b5ecb505665a042d567b94cec8))
+* **security:** implement listen-only mode for UDP discovery during setup ([36ce974](https://github.com/Old-Gods/og_messenger/commit/36ce97479e9ca4f638efd756ce5b045c09cb77b9))
+* **settings:** add method to mark first launch as complete and initialize settings service ([d2faa03](https://github.com/Old-Gods/og_messenger/commit/d2faa036b7c6642ffa71e7b427fe21ebdf8aac85))
+* **setup:** improve layout and responsiveness of setup screen ([4961213](https://github.com/Old-Gods/og_messenger/commit/4961213403375b0d3e689f7935d65794eedf2b16))
+* **setup:** signing in with a phone ([017b031](https://github.com/Old-Gods/og_messenger/commit/017b031913f8ea0dbf62b3dc16164668d4b48a1a))
+
 ## [1.4.0](https://github.com/Old-Gods/og_messenger/compare/v1.3.0...v1.4.0) (2026-02-20)
 
 
