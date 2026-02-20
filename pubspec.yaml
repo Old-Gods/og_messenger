@@ -33,11 +33,11 @@ flutter_launcher_icons:
   ios: true
   macos:
     generate: true
-    image_path: "images/og_messenger_icon.png"
+    image_path: "images/og_messenger_icon.dark.png"
   windows:
     generate: true
-    image_path: "images/og_messenger_icon.png"
+    image_path: "images/og_messenger_icon.dark.png"
   linux: true
-  image_path: "images/og_messenger_icon.png"
+  image_path: "images/og_messenger_icon.dark.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "images/og_messenger_icon.png"
+  adaptive_icon_foreground: "images/og_messenger_icon.dark.png"
