@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0](https://github.com/Old-Gods/og_messenger/compare/v1.3.0...v1.4.0) (2026-02-20)
+
+
+### Features
+
+* add adaptive launcher icons and update app icon configurations for multiple platforms ([962508a](https://github.com/Old-Gods/og_messenger/commit/962508a8a73a8d27f9d87be89f31d20f76ba3e68))
+* add devtools options file and update peer timeout duration ([2189643](https://github.com/Old-Gods/og_messenger/commit/2189643280db2f9210b21a21f37580263ce79d74))
+* integrate device_info_plus for hardware-based device ID management ([d880c57](https://github.com/Old-Gods/og_messenger/commit/d880c574b735db4cb9ff1e9d5284c7f37990531a))
+
+
+### Bug Fixes
+
+* add flutter_local_notifications_windows to FFI plugin list ([9b4a5e0](https://github.com/Old-Gods/og_messenger/commit/9b4a5e07d24d570bb04dd56854ddc593095b403e))
+* update notification plugin method calls to use named parameters ([601c7fa](https://github.com/Old-Gods/og_messenger/commit/601c7faaa129dab06b890e029cc03ae5200c3af4))
+
 ## [1.3.0](https://github.com/Old-Gods/og_messenger/compare/v1.2.0...v1.3.0) (2026-02-19)
 
 
