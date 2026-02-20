@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../settings/providers/settings_provider.dart';
+import '../../../security/data/services/security_service.dart';
+import '../../../discovery/data/services/udp_discovery_service.dart';
 
-/// Screen for initial setup - collecting user's display name
+/// Screen for initial setup - collecting user's display name and password
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
 
@@ -14,11 +17,374 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _nameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _detectingPeers = false;
+  String? _detectedPasswordHash;
+  String? _detectedEncryptedKey;
+  String? _detectedSalt;
+  int _failedAttempts = 0;
+  int _lockoutSeconds = 0;
+  Timer? _lockoutTimer;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _lockoutTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Check lockout status on init
+    final securityService = SecurityService.instance;
+    if (securityService.isLockedOut) {
+      _lockoutSeconds = securityService.lockoutRemainingSeconds;
+      _startLockoutTimer();
+    }
+    _failedAttempts = securityService.failedAttempts;
+  }
+
+  void _startLockoutTimer() {
+    _lockoutTimer?.cancel();
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_lockoutSeconds > 0) {
+        setState(() => _lockoutSeconds--);
+      } else {
+        timer.cancel();
+        _lockoutTimer = null;
+      }
+    });
+  }
+
+  Future<void> _detectPeers() async {
+    setState(() {
+      _detectingPeers = true;
+    });
+
+    try {
+      final settings = ref.read(settingsProvider);
+      final discoveryService = UdpDiscoveryService();
+
+      // Start discovery temporarily
+      await discoveryService.start(
+        deviceId: settings.deviceId!,
+        deviceName: _nameController.text.trim(),
+        tcpPort: 8888, // Temporary port
+      );
+
+      // Wait 8 seconds to discover peers
+      await Future.delayed(const Duration(seconds: 8));
+
+      final peers = discoveryService.discoveredPeers;
+
+      // Stop discovery
+      await discoveryService.stop();
+
+      if (peers.isEmpty) {
+        // First peer - needs to create password
+        setState(() {
+          _detectingPeers = false;
+        });
+        _showPasswordCreationDialog();
+      } else {
+        // Subsequent peer - needs to enter password
+        final firstPeer = peers.values.first;
+        setState(() {
+          _detectedPasswordHash = firstPeer.passwordHash;
+          _detectedEncryptedKey = firstPeer.encryptedKey;
+          _detectedSalt = firstPeer.deviceId; // Use first peer's device ID as salt
+          _detectingPeers = false;
+        });
+        _showPasswordEntryDialog();
+      }
+    } catch (e) {
+      setState(() => _detectingPeers = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to detect peers: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPasswordCreationDialog() async {
+    final passwordController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🔐 Create Room Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'You are the first peer on this network. Create a password to secure the room.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final pwd = passwordController.text;
+              final confirm = confirmController.text;
+
+              if (pwd.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password cannot be empty')),
+                );
+                return;
+              }
+
+              if (pwd != confirm) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Passwords do not match')),
+                );
+                return;
+              }
+
+              Navigator.of(context).pop(pwd);
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (password != null && password.isNotEmpty) {
+      await _setupRoomCreator(password);
+    }
+  }
+
+  Future<void> _setupRoomCreator(String password) async {
+    try {
+      final securityService = SecurityService.instance;
+      final settings = ref.read(settingsProvider);
+
+      // Hash password
+      final passwordHash = securityService.hashPassword(password);
+
+      // Generate random AES encryption key
+      final encryptionKey = securityService.generateRandomKey();
+
+      // Encrypt the AES key with the password for broadcasting
+      final encryptedKey = securityService.encryptKeyWithPassword(
+        encryptionKey,
+        password,
+        settings.deviceId!, // Use device ID as salt
+      );
+
+      // Store credentials
+      await securityService.setPasswordHash(passwordHash);
+      await securityService.setEncryptionKey(encryptionKey);
+      await securityService.setEncryptedKey(encryptedKey); // Store encrypted version
+      await securityService.setIsRoomCreator(true);
+      await securityService.setRoomCreatedTimestamp(
+        DateTime.now().millisecondsSinceEpoch,
+      );
+
+      // Save name and complete setup
+      await _completeSaveName();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create room: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPasswordEntryDialog() async {
+    final securityService = SecurityService.instance;
+
+    // Check if locked out
+    if (securityService.isLockedOut) {
+      _lockoutSeconds = securityService.lockoutRemainingSeconds;
+      _startLockoutTimer();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Too many failed attempts. Locked out for ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    final passwordController = TextEditingController();
+
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('🔐 Enter Room Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This room is password protected. Enter the password to join.',
+                style: TextStyle(fontSize: 14),
+              ),
+              if (_failedAttempts > 0) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Failed attempts: $_failedAttempts/5',
+                  style: TextStyle(
+                    color: Colors.orange[700],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(passwordController.text),
+              child: const Text('Join'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (password != null && password.isNotEmpty) {
+      await _verifyAndJoinRoom(password);
+    }
+  }
+
+  Future<void> _verifyAndJoinRoom(String password) async {
+    try {
+      final securityService = SecurityService.instance;
+
+      // Hash entered password
+      final enteredHash = securityService.hashPassword(password);
+
+      // Verify against detected hash
+      if (enteredHash != _detectedPasswordHash) {
+        // Wrong password
+        await securityService.incrementFailedAttempts();
+        setState(() => _failedAttempts = securityService.failedAttempts);
+
+        if (securityService.isLockedOut) {
+          _lockoutSeconds = securityService.lockoutRemainingSeconds;
+          _startLockoutTimer();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Too many failed attempts. Locked out for 5 minutes.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Incorrect password'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          // Show dialog again
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) _showPasswordEntryDialog();
+          });
+        }
+        return;
+      }
+
+      // Correct password - decrypt encryption key
+      if (_detectedEncryptedKey != null && _detectedSalt != null) {
+        final decryptedKey = securityService.decryptKeyWithPassword(
+          _detectedEncryptedKey!,
+          password,
+          _detectedSalt!,
+        );
+
+        if (decryptedKey != null) {
+          // Store credentials
+          await securityService.setPasswordHash(enteredHash);
+          await securityService.setEncryptionKey(decryptedKey);
+          await securityService.setIsRoomCreator(false);
+          await securityService.resetFailedAttempts();
+
+          // Save name and complete setup
+          await _completeSaveName();
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to decrypt encryption key')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to join room: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _completeSaveName() async {
+    await ref
+        .read(settingsProvider.notifier)
+        .setUserName(_nameController.text.trim(), skipBroadcast: true);
+    
+    // Navigate to chat screen after setup is complete
+    // Use root navigator and wait a frame to ensure state is updated
+    if (mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pushReplacementNamed('/chat');
+        }
+      });
+    }
   }
 
   Future<void> _saveName() async {
@@ -27,11 +393,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref
-          .read(settingsProvider.notifier)
-          .setUserName(_nameController.text.trim(), skipBroadcast: true);
-
-      // Navigation handled automatically by main.dart when state changes
+      // Detect peers first
+      await _detectPeers();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -100,18 +463,36 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _saveName,
+                  onPressed: (_isLoading || _detectingPeers || _lockoutSeconds > 0)
+                      ? null
+                      : _saveName,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: _isLoading
+                  child: _isLoading || _detectingPeers
                       ? const SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Get Started'),
+                      : _lockoutSeconds > 0
+                          ? Text(
+                              'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+                            )
+                          : Text(_detectingPeers
+                              ? 'Detecting peers...'
+                              : 'Get Started'),
                 ),
+                if (_detectingPeers) ...[
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Detecting peers on network...',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),

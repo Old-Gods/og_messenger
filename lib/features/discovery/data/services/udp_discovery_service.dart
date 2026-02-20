@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
+import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
 class UdpDiscoveryService {
@@ -184,12 +185,15 @@ class UdpDiscoveryService {
     }
 
     try {
+      final securityService = SecurityService.instance;
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
+        passwordHash: securityService.passwordHash,
+        encryptedKey: securityService.encryptedKey, // Use encrypted version
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
@@ -226,6 +230,22 @@ class UdpDiscoveryService {
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
 
+      // Validate password hash if we have one set
+      final securityService = SecurityService.instance;
+      if (securityService.hasPassword) {
+        // If peer has no password hash, reject them
+        if (peer.passwordHash == null || peer.passwordHash!.isEmpty) {
+          print('🚫 Rejected peer ${peer.deviceName}: No password hash');
+          return;
+        }
+
+        // If password hashes don't match, reject them
+        if (peer.passwordHash != securityService.passwordHash) {
+          print('🚫 Rejected peer ${peer.deviceName}: Password mismatch');
+          return;
+        }
+      }
+
       print(
         '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
       );
@@ -237,6 +257,8 @@ class UdpDiscoveryService {
         ipAddress: datagram.address.address,
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
+        passwordHash: peer.passwordHash,
+        encryptedKey: peer.encryptedKey,
       );
 
       // Add or update peer
