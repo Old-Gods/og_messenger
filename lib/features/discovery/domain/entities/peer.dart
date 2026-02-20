@@ -7,6 +7,7 @@ class Peer {
   final DateTime lastSeen;
   final String? passwordHash;
   final String? encryptedKey;
+  final String? keySalt; // Device ID used as salt to encrypt the key
 
   Peer({
     required this.deviceId,
@@ -16,6 +17,7 @@ class Peer {
     required this.lastSeen,
     this.passwordHash,
     this.encryptedKey,
+    this.keySalt,
   });
 
   /// Create a Peer from JSON received via UDP multicast
@@ -28,6 +30,7 @@ class Peer {
       lastSeen: DateTime.now(),
       passwordHash: json['password_hash'] as String?,
       encryptedKey: json['encrypted_key'] as String?,
+      keySalt: json['key_salt'] as String?,
     );
   }
 
@@ -46,6 +49,9 @@ class Peer {
     }
     if (encryptedKey != null) {
       json['encrypted_key'] = encryptedKey!;
+    }
+    if (keySalt != null) {
+      json['key_salt'] = keySalt!;
     }
 
     return json;

@@ -157,11 +157,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       } else {
         // Subsequent peer - needs to enter password
         final firstPeer = peers.values.first;
+        // Use the keySalt from the peer if available, otherwise fall back to peer's device ID
+        final salt = firstPeer.keySalt ?? firstPeer.deviceId;
+        print('🔍 Peer detection:');
+        print('   Peer device ID: ${firstPeer.deviceId}');
+        print(
+          '   Peer keySalt: ${firstPeer.keySalt ?? "null (using device ID as fallback)"}',
+        );
+        print('   Using salt: $salt');
         setState(() {
           _detectedPasswordHash = firstPeer.passwordHash;
           _detectedEncryptedKey = firstPeer.encryptedKey;
-          _detectedSalt =
-              firstPeer.deviceId; // Use first peer's device ID as salt
+          _detectedSalt = salt; // Use the actual salt used for encryption
           _detectingPeers = false;
         });
         _showPasswordEntryDialog();
@@ -283,6 +290,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       await securityService.setEncryptedKey(
         encryptedKey,
       ); // Store encrypted version
+      await securityService.setKeySalt(
+        settings.deviceId!,
+      ); // Store the salt used for encryption
       await securityService.setIsRoomCreator(true);
       await securityService.setRoomCreatedTimestamp(
         DateTime.now().millisecondsSinceEpoch,
@@ -440,6 +450,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           await securityService.setEncryptedKey(
             _detectedEncryptedKey!,
           ); // Store encrypted version too
+          await securityService.setKeySalt(_detectedSalt!); // Store the salt
           await securityService.setIsRoomCreator(false);
           await securityService.resetFailedAttempts();
 

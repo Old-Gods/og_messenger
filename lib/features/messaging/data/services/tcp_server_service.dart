@@ -59,7 +59,10 @@ class TcpServerService {
 
   /// Start the TCP server with auto-incrementing port
   Future<bool> start() async {
-    if (_isRunning) return false;
+    if (_isRunning) {
+      print('✅ TCP server already running on port $_actualPort');
+      return true; // Already running is success
+    }
 
     for (
       int attempt = 0;

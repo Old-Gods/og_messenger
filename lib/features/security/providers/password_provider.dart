@@ -377,6 +377,9 @@ class PasswordNotifier extends Notifier<PasswordState> {
       // Store the encrypted key for broadcasting
       await _securityService.setEncryptedKey(proposal.newEncryptedKey);
 
+      // Store the salt used for encryption
+      await _securityService.setKeySalt(proposal.keySalt);
+
       print('🔐 Password changed successfully');
       print('   New password hash: ${proposal.newPasswordHash}');
       print('   Encrypted key stored for broadcasting');

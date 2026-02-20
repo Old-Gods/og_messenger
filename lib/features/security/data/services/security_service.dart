@@ -12,6 +12,8 @@ class SecurityService {
   static const String _keyEncryptionKey = 'room_encryption_key';
   static const String _keyEncryptedKey =
       'room_encrypted_key'; // Encrypted version for broadcasting
+  static const String _keyKeySalt =
+      'key_encryption_salt'; // Salt (device ID) used to encrypt the key
   static const String _keyIsRoomCreator = 'is_room_creator';
   static const String _keyRoomCreatedTimestamp = 'room_created_timestamp';
   static const String _keyFailedAttempts = 'failed_attempts';
@@ -27,6 +29,50 @@ class SecurityService {
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
     _loadEncryptionKey();
+    await _migrateKeySaltIfNeeded();
+  }
+
+  /// Migrate keySalt for backward compatibility
+  /// If we have an encrypted key but no keySalt, we need to verify and fix it
+  Future<void> _migrateKeySaltIfNeeded() async {
+    if (_prefs == null) return;
+
+    final deviceId = _prefs!.getString('device_id');
+    if (deviceId == null || deviceId.isEmpty) return;
+
+    final passwordHash = _prefs!.getString(_keyPasswordHash);
+    final encryptedKey = _prefs!.getString(_keyEncryptedKey);
+    final isCreator = _prefs!.getBool(_keyIsRoomCreator) ?? false;
+
+    // If no password/encrypted key, nothing to migrate
+    if (passwordHash == null || encryptedKey == null) return;
+
+    final existingSalt = _prefs!.getString(_keyKeySalt);
+
+    // If we already have a keySalt, no migration needed
+    if (existingSalt != null && existingSalt.isNotEmpty) {
+      return;
+    }
+
+    print('🔧 Migrating keySalt');
+    print('   Device ID: $deviceId');
+    print('   Is room creator: $isCreator');
+
+    // PROBLEM: The encrypted key might have been encrypted with a DIFFERENT salt
+    // If this is the room creator, it should have used its own device ID as salt
+    // If this is a joiner, it should have used the creator's device ID as salt
+    // But we don't know what salt was actually used!
+
+    // Best guess: if creator, use own device ID; if joiner, we're in trouble
+    if (isCreator) {
+      print('🔧 Room creator: setting keySalt to own device ID');
+      await _prefs!.setString(_keyKeySalt, deviceId);
+    } else {
+      print('⚠️  Joiner device: cannot determine correct keySalt');
+      print('⚠️  User should clear auth data and rejoin');
+      // Set it to device ID anyway as a fallback
+      await _prefs!.setString(_keyKeySalt, deviceId);
+    }
   }
 
   /// Load encryption key from storage
@@ -207,6 +253,17 @@ class SecurityService {
     return await _prefs!.setString(_keyEncryptedKey, encryptedKey);
   }
 
+  /// Get key encryption salt (device ID used to encrypt the key)
+  String? get keySalt {
+    return _prefs?.getString(_keyKeySalt);
+  }
+
+  /// Set key encryption salt (device ID used to encrypt the key)
+  Future<bool> setKeySalt(String salt) async {
+    if (_prefs == null) return false;
+    return await _prefs!.setString(_keyKeySalt, salt);
+  }
+
   /// Check if password is set
   bool get hasPassword {
     return passwordHash != null && passwordHash!.isNotEmpty;
@@ -288,6 +345,7 @@ class SecurityService {
     await _prefs!.remove(_keyPasswordHash);
     await _prefs!.remove(_keyEncryptionKey);
     await _prefs!.remove(_keyEncryptedKey);
+    await _prefs!.remove(_keyKeySalt);
     await _prefs!.remove(_keyIsRoomCreator);
     await _prefs!.remove(_keyRoomCreatedTimestamp);
     await _prefs!.remove(_keyFailedAttempts);

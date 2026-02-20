@@ -43,7 +43,10 @@ class UdpDiscoveryService {
     required int tcpPort,
     bool listenOnly = false,
   }) async {
-    if (_isRunning) return false;
+    if (_isRunning) {
+      print('✅ UDP discovery already running');
+      return true; // Already running is success
+    }
 
     _deviceId = deviceId;
     _deviceName = deviceName;
@@ -201,6 +204,8 @@ class UdpDiscoveryService {
         lastSeen: DateTime.now(),
         passwordHash: securityService.passwordHash,
         encryptedKey: securityService.encryptedKey, // Use encrypted version
+        keySalt:
+            securityService.keySalt, // Include the salt used to encrypt the key
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
@@ -211,6 +216,7 @@ class UdpDiscoveryService {
           '📤 Broadcasting beacon with encrypted key length: ${securityService.encryptedKey!.length}',
         );
         print('   Beacon size: ${beaconBytes.length} bytes');
+        print('   Key salt: ${securityService.keySalt ?? "null"}');
       }
 
       _udpSocket!.send(
@@ -249,6 +255,7 @@ class UdpDiscoveryService {
           '📥 Received beacon with encrypted key length: ${peer.encryptedKey!.length}',
         );
         print('   Encrypted key: ${peer.encryptedKey}');
+        print('   Key salt: ${peer.keySalt ?? "null"}');
         print('   Datagram size: ${datagram.data.length} bytes');
       }
 
@@ -281,6 +288,7 @@ class UdpDiscoveryService {
         lastSeen: DateTime.now(),
         passwordHash: peer.passwordHash,
         encryptedKey: peer.encryptedKey,
+        keySalt: peer.keySalt, // Preserve the salt
       );
 
       // Add or update peer
