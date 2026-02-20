@@ -196,11 +196,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final encryptionKey = securityService.generateRandomKey();
 
       // Encrypt the AES key with the password for broadcasting
+      print('🔑 Encrypting key for broadcasting...');
+      print('   Device ID (salt): ${settings.deviceId}');
+      print('   Password length: ${password.length}');
+
       final encryptedKey = securityService.encryptKeyWithPassword(
         encryptionKey,
         password,
         settings.deviceId!, // Use device ID as salt
       );
+
+      print('   Encrypted key: $encryptedKey');
 
       // Store credentials
       await securityService.setPasswordHash(passwordHash);
@@ -343,6 +349,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       // Correct password - decrypt encryption key
       if (_detectedEncryptedKey != null && _detectedSalt != null) {
+        print('🔑 Attempting to decrypt key...');
+        print('   Encrypted key: $_detectedEncryptedKey');
+        print('   Salt (device ID): $_detectedSalt');
+        print('   Password length: ${password.length}');
+
         final decryptedKey = securityService.decryptKeyWithPassword(
           _detectedEncryptedKey!,
           password,

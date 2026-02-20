@@ -206,6 +206,13 @@ class UdpDiscoveryService {
       final beaconJson = jsonEncode(beacon.toJson());
       final beaconBytes = utf8.encode(beaconJson);
 
+      if (securityService.encryptedKey != null) {
+        print(
+          '📤 Broadcasting beacon with encrypted key length: ${securityService.encryptedKey!.length}',
+        );
+        print('   Beacon size: ${beaconBytes.length} bytes');
+      }
+
       _udpSocket!.send(
         beaconBytes,
         InternetAddress(NetworkConstants.multicastAddress),
@@ -236,6 +243,14 @@ class UdpDiscoveryService {
 
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
+
+      if (peer.encryptedKey != null) {
+        print(
+          '📥 Received beacon with encrypted key length: ${peer.encryptedKey!.length}',
+        );
+        print('   Encrypted key: ${peer.encryptedKey}');
+        print('   Datagram size: ${datagram.data.length} bytes');
+      }
 
       // Validate password hash if we have one set
       final securityService = SecurityService.instance;

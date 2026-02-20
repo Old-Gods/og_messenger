@@ -7,6 +7,10 @@ import '../../../security/data/services/security_service.dart';
 
 /// TCP server for receiving messages from peers
 class TcpServerService {
+  static final TcpServerService instance = TcpServerService._();
+
+  TcpServerService._();
+
   ServerSocket? _serverSocket;
   int? _actualPort;
   final Map<String, Socket> _connectedPeers = {};

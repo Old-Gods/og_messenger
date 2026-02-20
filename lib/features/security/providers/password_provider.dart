@@ -12,6 +12,7 @@ class PasswordProposal {
   final String proposerDeviceId;
   final String proposerName;
   final int timestamp;
+  final String newPassword;
   final String newPasswordHash;
   final String newEncryptedKey;
   final String keySalt;
@@ -24,6 +25,7 @@ class PasswordProposal {
     required this.proposerDeviceId,
     required this.proposerName,
     required this.timestamp,
+    required this.newPassword,
     required this.newPasswordHash,
     required this.newEncryptedKey,
     required this.keySalt,
@@ -40,14 +42,13 @@ class PasswordProposal {
   bool get isRejected => votes.values.any((v) => !v);
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 
-  PasswordProposal copyWith({
-    Map<String, bool>? votes,
-  }) {
+  PasswordProposal copyWith({Map<String, bool>? votes}) {
     return PasswordProposal(
       id: id,
       proposerDeviceId: proposerDeviceId,
       proposerName: proposerName,
       timestamp: timestamp,
+      newPassword: newPassword,
       newPasswordHash: newPasswordHash,
       newEncryptedKey: newEncryptedKey,
       keySalt: keySalt,
@@ -64,11 +65,7 @@ class PasswordState {
   final String? error;
   final String? successMessage;
 
-  const PasswordState({
-    this.activeProposal,
-    this.error,
-    this.successMessage,
-  });
+  const PasswordState({this.activeProposal, this.error, this.successMessage});
 
   PasswordState copyWith({
     PasswordProposal? activeProposal,
@@ -79,7 +76,9 @@ class PasswordState {
     bool clearSuccess = false,
   }) {
     return PasswordState(
-      activeProposal: clearProposal ? null : (activeProposal ?? this.activeProposal),
+      activeProposal: clearProposal
+          ? null
+          : (activeProposal ?? this.activeProposal),
       error: clearError ? null : error,
       successMessage: clearSuccess ? null : successMessage,
     );
@@ -96,11 +95,13 @@ class PasswordNotifier extends Notifier<PasswordState> {
 
   @override
   PasswordState build() {
-    _tcpServer = TcpServerService();
+    _tcpServer = TcpServerService.instance;
     _securityService = SecurityService.instance;
 
     // Listen to incoming proposals
-    _proposalSubscription = _tcpServer.passwordProposalStream.listen(_handleProposal);
+    _proposalSubscription = _tcpServer.passwordProposalStream.listen(
+      _handleProposal,
+    );
 
     // Listen to incoming votes
     _voteSubscription = _tcpServer.passwordVoteStream.listen(_handleVote);
@@ -111,7 +112,7 @@ class PasswordNotifier extends Notifier<PasswordState> {
       _proposalSubscription?.cancel();
       _voteSubscription?.cancel();
     });
-    
+
     ref.listen(discoveryProvider, (previous, next) {
       _checkPeerChanges(previous, next);
     });
@@ -155,6 +156,7 @@ class PasswordNotifier extends Notifier<PasswordState> {
         proposerDeviceId: settings.deviceId!,
         proposerName: settings.userName!,
         timestamp: DateTime.now().microsecondsSinceEpoch,
+        newPassword: newPassword,
         newPasswordHash: passwordHash,
         newEncryptedKey: encryptedKey,
         keySalt: keySalt,
@@ -176,6 +178,7 @@ class PasswordNotifier extends Notifier<PasswordState> {
         'proposer_device_id': settings.deviceId!,
         'proposer_name': settings.userName!,
         'timestamp': proposal.timestamp,
+        'new_password': newPassword,
         'new_password_hash': passwordHash,
         'new_encrypted_key': encryptedKey,
         'key_salt': keySalt,
@@ -209,11 +212,13 @@ class PasswordNotifier extends Notifier<PasswordState> {
         proposerDeviceId: data['proposer_device_id'] as String,
         proposerName: data['proposer_name'] as String,
         timestamp: data['timestamp'] as int,
+        newPassword: data['new_password'] as String,
         newPasswordHash: data['new_password_hash'] as String,
         newEncryptedKey: data['new_encrypted_key'] as String,
         keySalt: data['key_salt'] as String,
-        requiredPeerIds:
-            (data['required_peers'] as List).cast<String>().toSet(),
+        requiredPeerIds: (data['required_peers'] as List)
+            .cast<String>()
+            .toSet(),
         expiresAt: DateTime.now().add(const Duration(minutes: 5)),
       );
 
@@ -314,18 +319,31 @@ class PasswordNotifier extends Notifier<PasswordState> {
   Future<void> _applyPasswordChange(PasswordProposal proposal) async {
     try {
       // Decrypt the new encryption key with the new password
-      // For the proposer, we already have the key
-      // For voters, we need to get the password from the user first
-      // Since we're here, it means all votes are in, so we can apply
-      
+      final decryptedKey = _securityService.decryptKeyWithPassword(
+        proposal.newEncryptedKey,
+        proposal.newPassword,
+        proposal.keySalt,
+      );
+
+      if (decryptedKey == null) {
+        print('❌ Failed to decrypt new encryption key');
+        state = state.copyWith(error: 'Failed to decrypt new encryption key');
+        return;
+      }
+
       // Set the new password hash
       await _securityService.setPasswordHash(proposal.newPasswordHash);
-      
-      // The encryption key will be set when the user enters the new password
-      // For now, we just store the encrypted version
-      // This will be decrypted on next app launch or when user provides password
-      
+
+      // Set the new decrypted encryption key
+      await _securityService.setEncryptionKey(decryptedKey);
+
+      // Store the encrypted key for broadcasting
+      await _securityService.setEncryptedKey(proposal.newEncryptedKey);
+
       print('🔐 Password changed successfully');
+      print('   New password hash: ${proposal.newPasswordHash}');
+      print('   Encrypted key stored for broadcasting');
+
       state = state.copyWith(
         successMessage: 'Password changed successfully',
         clearProposal: true,
@@ -333,6 +351,7 @@ class PasswordNotifier extends Notifier<PasswordState> {
       );
       _clearTimer();
     } catch (e) {
+      print('❌ Failed to apply password: $e');
       state = state.copyWith(error: 'Failed to apply password: $e');
     }
   }
@@ -358,8 +377,7 @@ class PasswordNotifier extends Notifier<PasswordState> {
 
     // Check if any required voter disconnected
     for (final peerId in proposal.requiredPeerIds) {
-      if (peerId != settings.deviceId &&
-          !next.peers.containsKey(peerId)) {
+      if (peerId != settings.deviceId && !next.peers.containsKey(peerId)) {
         print('❌ Required voter disconnected - aborting proposal');
         state = state.copyWith(
           error: 'A peer disconnected during voting',
@@ -372,8 +390,8 @@ class PasswordNotifier extends Notifier<PasswordState> {
 
     // Check if new peer joined
     final newPeers = next.peers.keys.toSet().difference(
-          previous?.peers.keys.toSet() ?? {},
-        );
+      previous?.peers.keys.toSet() ?? {},
+    );
 
     if (newPeers.isNotEmpty) {
       print('⚠️ New peer joined during voting - aborting proposal');

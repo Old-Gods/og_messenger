@@ -72,13 +72,24 @@ class SecurityService {
     String password,
     String salt,
   ) {
+    print('🔒 Encrypting key...');
+    print('   Password: $password');
+    print('   Salt: $salt');
+
     final passwordKey = deriveKeyFromPassword(password, salt);
+    print('   Derived key from password: ${passwordKey.base64}');
+
     final encrypter = encrypt_pkg.Encrypter(
       encrypt_pkg.AES(passwordKey, mode: encrypt_pkg.AESMode.gcm),
     );
     final iv = encrypt_pkg.IV.fromSecureRandom(16);
     final encrypted = encrypter.encrypt(aesKey.base64, iv: iv);
-    return '${iv.base64}:${encrypted.base64}';
+
+    final result = '${iv.base64}:${encrypted.base64}';
+    print('   Result: $result');
+    print('   Result length: ${result.length}');
+
+    return result;
   }
 
   /// Decrypt the AES key with a password-derived key
@@ -88,19 +99,39 @@ class SecurityService {
     String salt,
   ) {
     try {
+      print('🔓 Decrypting key...');
+      print('   Encrypted key: $encryptedKey');
+      print('   Password: $password');
+      print('   Salt: $salt');
+
       final parts = encryptedKey.split(':');
-      if (parts.length != 2) return null;
+      if (parts.length != 2) {
+        print('❌ Invalid format: expected IV:data');
+        return null;
+      }
+
+      print('   IV part: ${parts[0]}');
+      print('   Encrypted part: ${parts[1]}');
+      print('   Encrypted part length: ${parts[1].length}');
 
       final iv = encrypt_pkg.IV.fromBase64(parts[0]);
       final encrypted = encrypt_pkg.Encrypted.fromBase64(parts[1]);
       final passwordKey = deriveKeyFromPassword(password, salt);
+
+      print('   Derived key from password: ${passwordKey.base64}');
+
       final encrypter = encrypt_pkg.Encrypter(
         encrypt_pkg.AES(passwordKey, mode: encrypt_pkg.AESMode.gcm),
       );
       final decrypted = encrypter.decrypt(encrypted, iv: iv);
+
+      print('   Decrypted value: $decrypted');
+      print('   Decrypted length: ${decrypted.length}');
+
       return encrypt_pkg.Key.fromBase64(decrypted);
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Failed to decrypt key: $e');
+      print('Stack trace: $stackTrace');
       return null;
     }
   }
