@@ -115,6 +115,12 @@ class SettingsService {
     return _prefs?.getBool(_keyFirstLaunch) ?? true;
   }
 
+  /// Mark first launch as complete
+  Future<bool> setFirstLaunchComplete() async {
+    if (_prefs == null) return false;
+    return await _prefs!.setBool(_keyFirstLaunch, false);
+  }
+
   /// Check if user has set their name
   bool get hasUserName {
     final name = userName;

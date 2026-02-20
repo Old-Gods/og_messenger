@@ -4,6 +4,7 @@ import 'features/setup/presentation/screens/setup_screen.dart';
 import 'features/chat/presentation/screens/chat_screen.dart';
 import 'features/settings/presentation/screens/settings_screen.dart';
 import 'features/settings/providers/settings_provider.dart';
+import 'features/settings/data/services/settings_service.dart';
 import 'features/messaging/providers/message_provider.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'features/security/data/services/security_service.dart';
@@ -17,6 +18,9 @@ void main() async {
 
   // Initialize security service
   await SecurityService.instance.initialize();
+
+  // Initialize settings service
+  await SettingsService.instance.initialize();
 
   runApp(const ProviderScope(child: OGMessengerApp()));
 }
@@ -34,10 +38,6 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Initialize settings
-    Future.microtask(() async {
-      await ref.read(settingsProvider.notifier).initialize();
-    });
   }
 
   @override
