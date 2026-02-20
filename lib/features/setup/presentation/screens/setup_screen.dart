@@ -449,87 +449,104 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           padding: const EdgeInsets.all(24.0),
           child: Form(
             key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.chat_bubble_outline,
-                  size: 80,
-                  color: Colors.blue,
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'Welcome to OG Messenger',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'A serverless LAN messenger for secure local communication',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Your Display Name',
-                    hintText: 'Enter your name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline,
+                            size: 80,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(height: 32),
+                          Text(
+                            'Welcome to OG Messenger',
+                            style: Theme.of(context).textTheme.headlineMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'A serverless LAN messenger for secure local communication',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 48),
+                          TextFormField(
+                            controller: _nameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Your Display Name',
+                              hintText: 'Enter your name',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.person),
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _saveName(),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Please enter your name';
+                              }
+                              if (value.trim().length < 2) {
+                                return 'Name must be at least 2 characters';
+                              }
+                              if (value.trim().length > 50) {
+                                return 'Name must be less than 50 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed:
+                                (_isLoading ||
+                                    _detectingPeers ||
+                                    _lockoutSeconds > 0)
+                                ? null
+                                : _saveName,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: _isLoading || _detectingPeers
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : _lockoutSeconds > 0
+                                ? Text(
+                                    'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+                                  )
+                                : Text(
+                                    _detectingPeers
+                                        ? 'Detecting peers...'
+                                        : 'Get Started',
+                                  ),
+                          ),
+                          if (_detectingPeers) ...[
+                            const SizedBox(height: 16),
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Detecting peers on network...',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _saveName(),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your name';
-                    }
-                    if (value.trim().length < 2) {
-                      return 'Name must be at least 2 characters';
-                    }
-                    if (value.trim().length > 50) {
-                      return 'Name must be less than 50 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed:
-                      (_isLoading || _detectingPeers || _lockoutSeconds > 0)
-                      ? null
-                      : _saveName,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isLoading || _detectingPeers
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : _lockoutSeconds > 0
-                      ? Text(
-                          'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
-                        )
-                      : Text(
-                          _detectingPeers
-                              ? 'Detecting peers...'
-                              : 'Get Started',
-                        ),
-                ),
-                if (_detectingPeers) ...[
-                  const SizedBox(height: 16),
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Detecting peers on network...',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ],
+                );
+              },
             ),
           ),
         ),
