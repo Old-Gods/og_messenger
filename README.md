@@ -1,6 +1,6 @@
 # OG Messenger
 
-<img align="right" width="200" alt="OG Messenger Logo" src="images/og_messenger.dark.png" />
+<img align="right" width="200" alt="OG Messenger Logo" src="images/og_messenger.png" />
 
 A serverless, cross-platform LAN messenger for private networks. Built with Flutter/Dart for Android, iOS, macOS, Windows, and Linux.
 
