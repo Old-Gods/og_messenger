@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
+import '../../../security/data/services/security_service.dart';
+import '../../../settings/data/services/settings_service.dart';
 
 /// Settings screen
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -152,6 +154,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _showClearAuthDataDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Auth Data'),
+        content: const Text(
+          'This will clear all authentication data including password, encryption keys, and messages.\n\nYou will need to set up the app again. This is useful after app reinstalls or updates that cause authentication issues.\n\nAre you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Clear all auth and app data
+        await SecurityService.instance.clearSecurityData();
+        await SettingsService.instance.clearUserData();
+        await ref.read(messageProvider.notifier).clearAllMessages();
+
+        if (mounted) {
+          // Navigate back to setup screen
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pushReplacementNamed('/setup');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to clear auth data: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -286,6 +337,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
+            ),
+          ),
+          const Divider(),
+
+          // Security
+          const ListTile(
+            title: Text(
+              'Security',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ElevatedButton.icon(
+              onPressed: _showClearAuthDataDialog,
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Clear Auth Data'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Clears all authentication data, encryption keys, and messages. Use this after reinstalls or updates if you have authentication issues.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
           const Divider(),

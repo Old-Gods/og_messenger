@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../security/data/services/security_service.dart';
 import '../../../discovery/data/services/udp_discovery_service.dart';
+import '../../../messaging/providers/message_provider.dart';
+import '../../../settings/data/services/settings_service.dart';
 
 /// Screen for initial setup - collecting user's display name and password
 class SetupScreen extends ConsumerStatefulWidget {
@@ -35,6 +37,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Pre-populate name field if user has a saved name
+    final settings = ref.read(settingsProvider);
+    if (settings.userName != null && settings.userName!.isNotEmpty) {
+      _nameController.text = settings.userName!;
+    }
+
     // Check lockout status on init
     final securityService = SecurityService.instance;
     if (securityService.isLockedOut) {
@@ -54,6 +63,64 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         _lockoutTimer = null;
       }
     });
+  }
+
+  Future<void> _showClearAuthDataDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Auth Data'),
+        content: const Text(
+          'This will clear all stored authentication data, encryption keys, and messages.\\n\\nUse this if you are having authentication issues after an app reinstall or update.\\n\\nAre you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Clear all auth and app data
+        await SecurityService.instance.clearSecurityData();
+        await SettingsService.instance.clearUserData();
+        await ref.read(messageProvider.notifier).clearAllMessages();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Auth data cleared. You can now set up fresh.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Reset state
+          setState(() {
+            _detectedPasswordHash = null;
+            _detectedEncryptedKey = null;
+            _detectedSalt = null;
+            _failedAttempts = 0;
+            _lockoutSeconds = 0;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to clear auth data: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _detectPeers() async {
@@ -535,6 +602,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  TextButton.icon(
+                    onPressed: _showClearAuthDataDialog,
+                    icon: const Icon(Icons.delete_forever, size: 18),
+                    label: const Text(
+                      'Having auth issues? Clear auth data',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.deepOrange,
+                    ),
+                  ),
                 ],
               ),
             ),

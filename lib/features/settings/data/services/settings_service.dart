@@ -127,6 +127,15 @@ class SettingsService {
     return name != null && name.trim().isNotEmpty;
   }
 
+  /// Clear all user-specific data (username and first launch flag)
+  /// Keeps device ID intact since it's hardware-based
+  Future<bool> clearUserData() async {
+    if (_prefs == null) return false;
+    await _prefs!.remove(_keyUserName);
+    await _prefs!.setBool(_keyFirstLaunch, true);
+    return true;
+  }
+
   /// Reset all settings (for testing)
   Future<bool> resetAll() async {
     if (_prefs == null) return false;
