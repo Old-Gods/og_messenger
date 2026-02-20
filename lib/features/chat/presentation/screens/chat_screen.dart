@@ -557,7 +557,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: _sendMessage,
-                  color: Theme.of(context).primaryColor,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ],
             ),
