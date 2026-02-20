@@ -1,7 +1,7 @@
 name: og_messenger
 description: OG Messenger - A serverless LAN messenger for private networks
 publish_to: none
-version: 1.4.0
+version: 1.5.0
 environment:
   sdk: ^3.11.0
 dependencies:
@@ -48,6 +48,5 @@ flutter_launcher_icons:
   image_path_ios: images/og_messenger_icon.dark.png
   adaptive_icon_background: '#FFFFFF'
   adaptive_icon_foreground: images/og_messenger_icon.png
-  # Android adaptive icons with light/dark theme support
   adaptive_icon_foreground_light: images/og_messenger_icon.png
   adaptive_icon_foreground_dark: images/og_messenger_icon.dark.png
