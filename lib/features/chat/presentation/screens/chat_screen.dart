@@ -5,6 +5,7 @@ import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../security/providers/password_provider.dart';
+import '../../../security/data/services/security_service.dart';
 
 /// Main chat screen
 class ChatScreen extends ConsumerStatefulWidget {
@@ -55,6 +56,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Prevent multiple simultaneous initializations
     if (_isInitializing || _isInitialized) {
       print('⚠️ Services already initializing or initialized, skipping...');
+      return;
+    }
+
+    // Don't start services if not authenticated
+    final securityService = SecurityService.instance;
+    if (!securityService.hasPassword) {
+      print(
+        '⚠️ No password set - user not authenticated, skipping service initialization',
+      );
       return;
     }
 
@@ -203,7 +213,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     if (newPassword != null && newPassword.isNotEmpty) {
-      await ref.read(passwordProvider.notifier).proposePasswordChange(newPassword);
+      await ref
+          .read(passwordProvider.notifier)
+          .proposePasswordChange(newPassword);
     }
   }
 
@@ -214,7 +226,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       builder: (context) => Consumer(
         builder: (context, ref, child) {
           final currentProposal = ref.watch(passwordProvider).activeProposal;
-          
+
           // Close dialog if proposal is gone
           if (currentProposal == null || currentProposal.id != proposal.id) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -223,9 +235,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               }
             });
           }
-          
+
           final activeProposal = currentProposal ?? proposal;
-          
+
           return AlertDialog(
             title: const Text('🔐 Password Change Request'),
             content: Column(
@@ -243,7 +255,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
-                  value: activeProposal.yesVotes / activeProposal.requiredVoteCount,
+                  value:
+                      activeProposal.yesVotes /
+                      activeProposal.requiredVoteCount,
                   backgroundColor: Colors.grey[300],
                   valueColor: const AlwaysStoppedAnimation(Colors.green),
                 ),
@@ -258,10 +272,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  ref.read(passwordProvider.notifier).voteOnProposal(
-                        activeProposal.id,
-                        false,
-                      );
+                  ref
+                      .read(passwordProvider.notifier)
+                      .voteOnProposal(activeProposal.id, false);
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Reject'),
@@ -269,10 +282,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  ref.read(passwordProvider.notifier).voteOnProposal(
-                        activeProposal.id,
-                        true,
-                      );
+                  ref
+                      .read(passwordProvider.notifier)
+                      .voteOnProposal(activeProposal.id, true);
                 },
                 child: const Text('Approve'),
               ),
@@ -292,7 +304,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Listen for password proposals
     ref.listen<PasswordState>(passwordProvider, (previous, next) {
       // Show proposal dialog for new proposals (not from us)
-      if (next.activeProposal != null && 
+      if (next.activeProposal != null &&
           next.activeProposal!.id != _lastProposalId &&
           next.activeProposal!.proposerDeviceId != settings.deviceId) {
         _lastProposalId = next.activeProposal!.id;
@@ -300,25 +312,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           _showPasswordVoteDialog(next.activeProposal!);
         });
       }
-      
+
       // Clear proposal tracking when proposal is done
       if (next.activeProposal == null && _lastProposalId != null) {
         _lastProposalId = null;
       }
-      
+
       // Show error messages
       if (next.error != null && next.error != previous?.error) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
         );
-        Future.microtask(() => ref.read(passwordProvider.notifier).clearError());
+        Future.microtask(
+          () => ref.read(passwordProvider.notifier).clearError(),
+        );
       }
-      
+
       // Show success messages
-      if (next.successMessage != null && 
+      if (next.successMessage != null &&
           next.successMessage != previous?.successMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -326,7 +337,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Future.microtask(() => ref.read(passwordProvider.notifier).clearSuccess());
+        Future.microtask(
+          () => ref.read(passwordProvider.notifier).clearSuccess(),
+        );
       }
     });
 

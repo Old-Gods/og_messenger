@@ -65,11 +65,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final settings = ref.read(settingsProvider);
       final discoveryService = UdpDiscoveryService();
 
-      // Start discovery temporarily
+      // Start discovery temporarily (listen-only mode to avoid broadcasting unauthenticated)
       await discoveryService.start(
         deviceId: settings.deviceId!,
         deviceName: _nameController.text.trim(),
         tcpPort: 8888, // Temporary port
+        listenOnly: true, // Don't broadcast while unauthenticated
       );
 
       // Wait 8 seconds to discover peers

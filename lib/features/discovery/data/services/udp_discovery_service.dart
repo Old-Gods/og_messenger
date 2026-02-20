@@ -22,6 +22,7 @@ class UdpDiscoveryService {
   String? _deviceId;
   String? _deviceName;
   int? _tcpPort;
+  bool _listenOnly = false;
 
   /// Stream of discovered peers
   Stream<Map<String, Peer>> get peerStream => _peerController.stream;
@@ -40,12 +41,14 @@ class UdpDiscoveryService {
     required String deviceId,
     required String deviceName,
     required int tcpPort,
+    bool listenOnly = false,
   }) async {
     if (_isRunning) return false;
 
     _deviceId = deviceId;
     _deviceName = deviceName;
     _tcpPort = tcpPort;
+    _listenOnly = listenOnly;
 
     try {
       print('🔍 Starting UDP discovery...');
@@ -146,11 +149,13 @@ class UdpDiscoveryService {
         onError: (error) => _errorController.add('UDP error: $error'),
       );
 
-      // Start broadcasting beacons
-      _beaconTimer = Timer.periodic(
-        NetworkConstants.discoveryBeaconInterval,
-        (_) => _broadcastBeacon(),
-      );
+      // Start broadcasting beacons (unless in listen-only mode)
+      if (!_listenOnly) {
+        _beaconTimer = Timer.periodic(
+          NetworkConstants.discoveryBeaconInterval,
+          (_) => _broadcastBeacon(),
+        );
+      }
 
       // Start peer cleanup timer
       _cleanupTimer = Timer.periodic(
@@ -160,8 +165,10 @@ class UdpDiscoveryService {
 
       _isRunning = true;
 
-      // Send initial beacon immediately
-      _broadcastBeacon();
+      // Send initial beacon immediately (unless in listen-only mode)
+      if (!_listenOnly) {
+        _broadcastBeacon();
+      }
 
       return true;
     } catch (e, stackTrace) {
