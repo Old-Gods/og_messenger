@@ -7,7 +7,6 @@ import 'features/settings/providers/settings_provider.dart';
 import 'features/settings/data/services/settings_service.dart';
 import 'features/messaging/providers/message_provider.dart';
 import 'features/notifications/data/services/notification_service.dart';
-import 'features/security/data/services/security_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,9 +14,6 @@ void main() async {
   // Initialize notification service
   await NotificationService.instance.initialize();
   await NotificationService.instance.requestPermissions();
-
-  // Initialize security service
-  await SecurityService.instance.initialize();
 
   // Initialize settings service
   await SettingsService.instance.initialize();

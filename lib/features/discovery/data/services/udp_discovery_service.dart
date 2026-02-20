@@ -4,7 +4,6 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
-import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
 class UdpDiscoveryService {
@@ -195,29 +194,16 @@ class UdpDiscoveryService {
     }
 
     try {
-      final securityService = SecurityService.instance;
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
-        passwordHash: securityService.passwordHash,
-        encryptedKey: securityService.encryptedKey, // Use encrypted version
-        keySalt:
-            securityService.keySalt, // Include the salt used to encrypt the key
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
       final beaconBytes = utf8.encode(beaconJson);
-
-      if (securityService.encryptedKey != null) {
-        print(
-          '📤 Broadcasting beacon with encrypted key length: ${securityService.encryptedKey!.length}',
-        );
-        print('   Beacon size: ${beaconBytes.length} bytes');
-        print('   Key salt: ${securityService.keySalt ?? "null"}');
-      }
 
       _udpSocket!.send(
         beaconBytes,
@@ -250,31 +236,6 @@ class UdpDiscoveryService {
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
 
-      if (peer.encryptedKey != null) {
-        print(
-          '📥 Received beacon with encrypted key length: ${peer.encryptedKey!.length}',
-        );
-        print('   Encrypted key: ${peer.encryptedKey}');
-        print('   Key salt: ${peer.keySalt ?? "null"}');
-        print('   Datagram size: ${datagram.data.length} bytes');
-      }
-
-      // Validate password hash if we have one set
-      final securityService = SecurityService.instance;
-      if (securityService.hasPassword) {
-        // If peer has no password hash, reject them
-        if (peer.passwordHash == null || peer.passwordHash!.isEmpty) {
-          print('🚫 Rejected peer ${peer.deviceName}: No password hash');
-          return;
-        }
-
-        // If password hashes don't match, reject them
-        if (peer.passwordHash != securityService.passwordHash) {
-          print('🚫 Rejected peer ${peer.deviceName}: Password mismatch');
-          return;
-        }
-      }
-
       print(
         '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
       );
@@ -286,9 +247,6 @@ class UdpDiscoveryService {
         ipAddress: datagram.address.address,
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
-        passwordHash: peer.passwordHash,
-        encryptedKey: peer.encryptedKey,
-        keySalt: peer.keySalt, // Preserve the salt
       );
 
       // Add or update peer

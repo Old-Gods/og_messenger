@@ -4,8 +4,6 @@ import '../../../../core/constants/network_constants.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
-import '../../../security/providers/password_provider.dart';
-import '../../../security/data/services/security_service.dart';
 
 /// Main chat screen
 class ChatScreen extends ConsumerStatefulWidget {
@@ -21,7 +19,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _isInitialized = false;
   bool _isInitializing = false;
   int _previousMessageCount = 0;
-  String? _lastProposalId;
 
   @override
   void initState() {
@@ -56,15 +53,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Prevent multiple simultaneous initializations
     if (_isInitializing || _isInitialized) {
       print('⚠️ Services already initializing or initialized, skipping...');
-      return;
-    }
-
-    // Don't start services if not authenticated
-    final securityService = SecurityService.instance;
-    if (!securityService.hasPassword) {
-      print(
-        '⚠️ No password set - user not authenticated, skipping service initialization',
-      );
       return;
     }
 
@@ -171,221 +159,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
-  Future<void> _showPasswordProposalDialog() async {
-    final discoveryState = ref.read(discoveryProvider);
-    final passwordController = TextEditingController();
-
-    final newPassword = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('🔐 Change Room Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'This requires approval from all ${discoveryState.peers.length + 1} connected peers (including you).',
-              style: TextStyle(color: Colors.orange[700], fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'New Password',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(passwordController.text),
-            child: const Text('Propose'),
-          ),
-        ],
-      ),
-    );
-
-    if (newPassword != null && newPassword.isNotEmpty) {
-      await ref
-          .read(passwordProvider.notifier)
-          .proposePasswordChange(newPassword);
-    }
-  }
-
-  void _showPasswordVoteDialog(PasswordProposal proposal) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Consumer(
-        builder: (context, ref, child) {
-          final currentProposal = ref.watch(passwordProvider).activeProposal;
-
-          // Close dialog if proposal is gone
-          if (currentProposal == null || currentProposal.id != proposal.id) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-            });
-          }
-
-          final activeProposal = currentProposal ?? proposal;
-
-          return AlertDialog(
-            title: const Text('🔐 Password Change Request'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${activeProposal.proposerName} wants to change the room password.',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.blue.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.lock, size: 20, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'New password: ${activeProposal.newPassword}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'All ${activeProposal.requiredVoteCount} peers must approve.',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value:
-                      activeProposal.yesVotes /
-                      activeProposal.requiredVoteCount,
-                  backgroundColor: Colors.grey[300],
-                  valueColor: const AlwaysStoppedAnimation(Colors.green),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${activeProposal.yesVotes}/${activeProposal.requiredVoteCount} approved',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref
-                      .read(passwordProvider.notifier)
-                      .voteOnProposal(activeProposal.id, false);
-                },
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Reject'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref
-                      .read(passwordProvider.notifier)
-                      .voteOnProposal(activeProposal.id, true);
-                },
-                child: const Text('Approve'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final messageState = ref.watch(messageProvider);
     final discoveryState = ref.watch(discoveryProvider);
     final settings = ref.watch(settingsProvider);
-
-    // Listen for password proposals
-    ref.listen<PasswordState>(passwordProvider, (previous, next) {
-      print('👂 Password state changed');
-      print('   Previous proposal: ${previous?.activeProposal?.id}');
-      print('   Next proposal: ${next.activeProposal?.id}');
-      print('   Last proposal ID: $_lastProposalId');
-      print('   Settings deviceId: ${settings.deviceId}');
-
-      // Show proposal dialog for new proposals (not from us)
-      if (next.activeProposal != null &&
-          next.activeProposal!.id != _lastProposalId &&
-          next.activeProposal!.proposerDeviceId != settings.deviceId) {
-        print(
-          '🔔 Showing password vote dialog for proposal: ${next.activeProposal!.id}',
-        );
-        _lastProposalId = next.activeProposal!.id;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showPasswordVoteDialog(next.activeProposal!);
-        });
-      } else if (next.activeProposal != null) {
-        print('⚠️ Not showing dialog because:');
-        print(
-          '   ID matches last? ${next.activeProposal!.id == _lastProposalId}',
-        );
-        print(
-          '   Is from us? ${next.activeProposal!.proposerDeviceId == settings.deviceId}',
-        );
-      }
-
-      // Clear proposal tracking when proposal is done
-      if (next.activeProposal == null && _lastProposalId != null) {
-        _lastProposalId = null;
-      }
-
-      // Show error messages
-      if (next.error != null && next.error != previous?.error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
-        );
-        Future.microtask(
-          () => ref.read(passwordProvider.notifier).clearError(),
-        );
-      }
-
-      // Show success messages
-      if (next.successMessage != null &&
-          next.successMessage != previous?.successMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.successMessage!),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Future.microtask(
-          () => ref.read(passwordProvider.notifier).clearSuccess(),
-        );
-      }
-    });
 
     // Auto-scroll when new messages arrive
     if (messageState.messages.length != _previousMessageCount) {
@@ -418,11 +196,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.lock),
-            tooltip: 'Change Room Password',
-            onPressed: () => _showPasswordProposalDialog(),
           ),
           IconButton(
             icon: const Icon(Icons.settings),

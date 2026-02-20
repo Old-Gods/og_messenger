@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../messaging/domain/entities/message.dart';
-import '../../../security/data/services/security_service.dart';
 
 /// TCP server for receiving messages from peers
 class TcpServerService {
@@ -22,10 +21,6 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _nameChangeController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _passwordProposalController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _passwordVoteController =
-      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -42,14 +37,6 @@ class TcpServerService {
   /// Stream of name change notifications
   Stream<Map<String, dynamic>> get nameChangeStream =>
       _nameChangeController.stream;
-
-  /// Stream of password change proposals
-  Stream<Map<String, dynamic>> get passwordProposalStream =>
-      _passwordProposalController.stream;
-
-  /// Stream of password change votes
-  Stream<Map<String, dynamic>> get passwordVoteStream =>
-      _passwordVoteController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -156,64 +143,11 @@ class TcpServerService {
           continue;
         }
 
-        // Check if this is a password change proposal
-        if (json['type'] == 'password_proposal') {
-          print('🔐 Received password change proposal');
-          _passwordProposalController.add({
-            'proposal_id': json['proposal_id'] as String,
-            'proposer_device_id': json['proposer_device_id'] as String,
-            'proposer_name': json['proposer_name'] as String,
-            'timestamp': json['timestamp'] as int,
-            'new_password': json['new_password'] as String,
-            'new_password_hash': json['new_password_hash'] as String,
-            'new_encrypted_key': json['new_encrypted_key'] as String,
-            'key_salt': json['key_salt'] as String,
-            'required_peers': (json['required_peers'] as List).cast<String>(),
-          });
-          continue;
-        }
-
-        // Check if this is a password change vote
-        if (json['type'] == 'password_vote') {
-          print('✅ Received password change vote');
-          _passwordVoteController.add({
-            'proposal_id': json['proposal_id'] as String,
-            'voter_device_id': json['voter_device_id'] as String,
-            'voter_name': json['voter_name'] as String,
-            'vote': json['vote'] as bool,
-          });
-          continue;
-        }
-
         // Otherwise, it's a regular message
         final parsedMessage = Message.fromJson(json);
 
-        // Decrypt message content if security is enabled
-        final securityService = SecurityService.instance;
-        Message finalMessage = parsedMessage;
-
-        if (securityService.hasPassword &&
-            securityService.encryptionKey != null) {
-          try {
-            final decryptedContent = securityService.decryptMessage(
-              parsedMessage.content,
-            );
-            finalMessage = Message(
-              uuid: parsedMessage.uuid,
-              timestampMicros: parsedMessage.timestampMicros,
-              senderId: parsedMessage.senderId,
-              senderName: parsedMessage.senderName,
-              content: decryptedContent,
-              isOutgoing: parsedMessage.isOutgoing,
-            );
-          } catch (e) {
-            print('⚠️ Failed to decrypt message: $e');
-            // Keep original message if decryption fails
-          }
-        }
-
         print(
-          '📨 Received message from ${finalMessage.senderName}: ${finalMessage.content}',
+          '📨 Received message from ${parsedMessage.senderName}: ${parsedMessage.content}',
         );
 
         // Validate message size
@@ -225,7 +159,7 @@ class TcpServerService {
           continue;
         }
 
-        _messageController.add(finalMessage);
+        _messageController.add(parsedMessage);
       }
     } catch (e) {
       _errorController.add('Failed to parse message: $e');
@@ -239,31 +173,7 @@ class TcpServerService {
     Message message,
   ) async {
     try {
-      // Encrypt message content if security is enabled
-      final securityService = SecurityService.instance;
-      Message messageToSend = message;
-
-      if (securityService.hasPassword &&
-          securityService.encryptionKey != null) {
-        try {
-          final encryptedContent = securityService.encryptMessage(
-            message.content,
-          );
-          messageToSend = Message(
-            uuid: message.uuid,
-            timestampMicros: message.timestampMicros,
-            senderId: message.senderId,
-            senderName: message.senderName,
-            content: encryptedContent,
-            isOutgoing: message.isOutgoing,
-          );
-        } catch (e) {
-          print('⚠️ Failed to encrypt message: $e');
-          // Continue with unencrypted message
-        }
-      }
-
-      final messageJson = jsonEncode(messageToSend.toJson());
+      final messageJson = jsonEncode(message.toJson());
       final messageBytes = utf8.encode(messageJson);
 
       // Validate message size before sending
@@ -443,7 +353,5 @@ class TcpServerService {
     _errorController.close();
     _syncRequestController.close();
     _nameChangeController.close();
-    _passwordProposalController.close();
-    _passwordVoteController.close();
   }
 }

@@ -5,9 +5,6 @@ class Peer {
   final String ipAddress;
   final int tcpPort;
   final DateTime lastSeen;
-  final String? passwordHash;
-  final String? encryptedKey;
-  final String? keySalt; // Device ID used as salt to encrypt the key
 
   Peer({
     required this.deviceId,
@@ -15,9 +12,6 @@ class Peer {
     required this.ipAddress,
     required this.tcpPort,
     required this.lastSeen,
-    this.passwordHash,
-    this.encryptedKey,
-    this.keySalt,
   });
 
   /// Create a Peer from JSON received via UDP multicast
@@ -28,33 +22,18 @@ class Peer {
       ipAddress: json['ip_address'] as String,
       tcpPort: json['tcp_port'] as int,
       lastSeen: DateTime.now(),
-      passwordHash: json['password_hash'] as String?,
-      encryptedKey: json['encrypted_key'] as String?,
-      keySalt: json['key_salt'] as String?,
     );
   }
 
   /// Convert Peer to JSON for UDP multicast broadcast
   Map<String, dynamic> toJson() {
-    final json = {
+    return {
       'device_id': deviceId,
       'device_name': deviceName,
       'ip_address': ipAddress,
       'tcp_port': tcpPort,
       'timestamp': DateTime.now().microsecondsSinceEpoch,
     };
-
-    if (passwordHash != null) {
-      json['password_hash'] = passwordHash!;
-    }
-    if (encryptedKey != null) {
-      json['encrypted_key'] = encryptedKey!;
-    }
-    if (keySalt != null) {
-      json['key_salt'] = keySalt!;
-    }
-
-    return json;
   }
 
   /// Create a copy with updated fields
@@ -64,8 +43,6 @@ class Peer {
     String? ipAddress,
     int? tcpPort,
     DateTime? lastSeen,
-    String? passwordHash,
-    String? encryptedKey,
   }) {
     return Peer(
       deviceId: deviceId ?? this.deviceId,
@@ -73,8 +50,6 @@ class Peer {
       ipAddress: ipAddress ?? this.ipAddress,
       tcpPort: tcpPort ?? this.tcpPort,
       lastSeen: lastSeen ?? this.lastSeen,
-      passwordHash: passwordHash ?? this.passwordHash,
-      encryptedKey: encryptedKey ?? this.encryptedKey,
     );
   }
 
