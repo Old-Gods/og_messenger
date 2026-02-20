@@ -92,7 +92,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         setState(() {
           _detectedPasswordHash = firstPeer.passwordHash;
           _detectedEncryptedKey = firstPeer.encryptedKey;
-          _detectedSalt = firstPeer.deviceId; // Use first peer's device ID as salt
+          _detectedSalt =
+              firstPeer.deviceId; // Use first peer's device ID as salt
           _detectingPeers = false;
         });
         _showPasswordEntryDialog();
@@ -100,9 +101,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } catch (e) {
       setState(() => _detectingPeers = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to detect peers: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to detect peers: $e')));
       }
     }
   }
@@ -203,7 +204,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       // Store credentials
       await securityService.setPasswordHash(passwordHash);
       await securityService.setEncryptionKey(encryptionKey);
-      await securityService.setEncryptedKey(encryptedKey); // Store encrypted version
+      await securityService.setEncryptedKey(
+        encryptedKey,
+      ); // Store encrypted version
       await securityService.setIsRoomCreator(true);
       await securityService.setRoomCreatedTimestamp(
         DateTime.now().millisecondsSinceEpoch,
@@ -213,9 +216,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       await _completeSaveName();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create room: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to create room: $e')));
       }
     }
   }
@@ -259,10 +262,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Failed attempts: $_failedAttempts/5',
-                  style: TextStyle(
-                    color: Colors.orange[700],
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.orange[700], fontSize: 12),
                 ),
               ],
               const SizedBox(height: 16),
@@ -283,7 +283,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(passwordController.text),
+              onPressed: () =>
+                  Navigator.of(context).pop(passwordController.text),
               child: const Text('Join'),
             ),
           ],
@@ -315,7 +316,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Too many failed attempts. Locked out for 5 minutes.'),
+                content: Text(
+                  'Too many failed attempts. Locked out for 5 minutes.',
+                ),
                 backgroundColor: Colors.red,
               ),
             );
@@ -346,11 +349,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         );
 
         if (decryptedKey != null) {
+          print('✅ Successfully decrypted encryption key');
+
           // Store credentials
           await securityService.setPasswordHash(enteredHash);
           await securityService.setEncryptionKey(decryptedKey);
+          await securityService.setEncryptedKey(
+            _detectedEncryptedKey!,
+          ); // Store encrypted version too
           await securityService.setIsRoomCreator(false);
           await securityService.resetFailedAttempts();
+
+          print('✅ Credentials stored, completing setup...');
 
           // Save name and complete setup
           await _completeSaveName();
@@ -364,26 +374,37 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join room: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to join room: $e')));
       }
     }
   }
 
   Future<void> _completeSaveName() async {
+    print('🔧 Completing setup - saving username...');
     await ref
         .read(settingsProvider.notifier)
         .setUserName(_nameController.text.trim(), skipBroadcast: true);
-    
+
+    print('🔧 Username saved, navigating to chat...');
+
     // Navigate to chat screen after setup is complete
     // Use root navigator and wait a frame to ensure state is updated
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          Navigator.of(context, rootNavigator: true).pushReplacementNamed('/chat');
+          print('🚀 Attempting navigation to /chat');
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pushReplacementNamed('/chat');
+        } else {
+          print('❌ Widget not mounted, cannot navigate');
         }
       });
+    } else {
+      print('❌ Widget not mounted before postFrameCallback');
     }
   }
 
@@ -463,7 +484,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: (_isLoading || _detectingPeers || _lockoutSeconds > 0)
+                  onPressed:
+                      (_isLoading || _detectingPeers || _lockoutSeconds > 0)
                       ? null
                       : _saveName,
                   style: ElevatedButton.styleFrom(
@@ -476,12 +498,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : _lockoutSeconds > 0
-                          ? Text(
-                              'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
-                            )
-                          : Text(_detectingPeers
+                      ? Text(
+                          'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+                        )
+                      : Text(
+                          _detectingPeers
                               ? 'Detecting peers...'
-                              : 'Get Started'),
+                              : 'Get Started',
+                        ),
                 ),
                 if (_detectingPeers) ...[
                   const SizedBox(height: 16),
