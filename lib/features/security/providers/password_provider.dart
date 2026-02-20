@@ -185,7 +185,18 @@ class PasswordNotifier extends Notifier<PasswordState> {
         'required_peers': allPeers.toList(),
       };
 
+      print('📤 Broadcasting password proposal: $message');
       await _broadcastMessage(message);
+
+      // Broadcast proposer's automatic vote
+      final voteMessage = {
+        'type': 'password_vote',
+        'proposal_id': proposalId,
+        'voter_device_id': settings.deviceId!,
+        'voter_name': settings.userName!,
+        'vote': true,
+      };
+      await _broadcastMessage(voteMessage);
 
       // Start expiration timer
       _startExpirationTimer();
@@ -202,17 +213,31 @@ class PasswordNotifier extends Notifier<PasswordState> {
   /// Handle incoming proposal
   void _handleProposal(Map<String, dynamic> data) {
     try {
+      print('📨 Received password proposal data: $data');
       final settings = ref.read(settingsProvider);
 
       // Don't process our own proposal
-      if (data['proposer_device_id'] == settings.deviceId) return;
+      if (data['proposer_device_id'] == settings.deviceId) {
+        print('⚠️ Ignoring own proposal');
+        return;
+      }
+
+      print('✅ Processing proposal from ${data['proposer_name']}');
+
+      // Handle missing new_password field (for backward compatibility or error recovery)
+      final newPassword = data['new_password'] as String?;
+      if (newPassword == null) {
+        print('❌ Proposal missing new_password field');
+        state = state.copyWith(error: 'Invalid proposal: missing password');
+        return;
+      }
 
       final proposal = PasswordProposal(
         id: data['proposal_id'] as String,
         proposerDeviceId: data['proposer_device_id'] as String,
         proposerName: data['proposer_name'] as String,
         timestamp: data['timestamp'] as int,
-        newPassword: data['new_password'] as String,
+        newPassword: newPassword,
         newPasswordHash: data['new_password_hash'] as String,
         newEncryptedKey: data['new_encrypted_key'] as String,
         keySalt: data['key_salt'] as String,
@@ -226,6 +251,9 @@ class PasswordNotifier extends Notifier<PasswordState> {
       _startExpirationTimer();
 
       print('🔐 Received password proposal: ${proposal.id}');
+      print(
+        '   State updated with proposal, activeProposal is now: ${state.activeProposal?.id}',
+      );
     } catch (e) {
       print('❌ Failed to handle proposal: $e');
     }
@@ -301,6 +329,15 @@ class PasswordNotifier extends Notifier<PasswordState> {
   void _checkProposalCompletion() {
     final proposal = state.activeProposal;
     if (proposal == null) return;
+
+    print('🔍 Checking proposal completion:');
+    print('   Votes: ${proposal.votes}');
+    print('   Required peers: ${proposal.requiredPeerIds}');
+    print(
+      '   Vote count: ${proposal.votes.length} / ${proposal.requiredVoteCount}',
+    );
+    print('   isApproved: ${proposal.isApproved}');
+    print('   isRejected: ${proposal.isRejected}');
 
     if (proposal.isRejected) {
       print('❌ Password change rejected');

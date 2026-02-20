@@ -161,6 +161,7 @@ class TcpServerService {
             'proposer_device_id': json['proposer_device_id'] as String,
             'proposer_name': json['proposer_name'] as String,
             'timestamp': json['timestamp'] as int,
+            'new_password': json['new_password'] as String,
             'new_password_hash': json['new_password_hash'] as String,
             'new_encrypted_key': json['new_encrypted_key'] as String,
             'key_salt': json['key_salt'] as String,

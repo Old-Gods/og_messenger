@@ -328,14 +328,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Listen for password proposals
     ref.listen<PasswordState>(passwordProvider, (previous, next) {
+      print('👂 Password state changed');
+      print('   Previous proposal: ${previous?.activeProposal?.id}');
+      print('   Next proposal: ${next.activeProposal?.id}');
+      print('   Last proposal ID: $_lastProposalId');
+      print('   Settings deviceId: ${settings.deviceId}');
+
       // Show proposal dialog for new proposals (not from us)
       if (next.activeProposal != null &&
           next.activeProposal!.id != _lastProposalId &&
           next.activeProposal!.proposerDeviceId != settings.deviceId) {
+        print(
+          '🔔 Showing password vote dialog for proposal: ${next.activeProposal!.id}',
+        );
         _lastProposalId = next.activeProposal!.id;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showPasswordVoteDialog(next.activeProposal!);
         });
+      } else if (next.activeProposal != null) {
+        print('⚠️ Not showing dialog because:');
+        print(
+          '   ID matches last? ${next.activeProposal!.id == _lastProposalId}',
+        );
+        print(
+          '   Is from us? ${next.activeProposal!.proposerDeviceId == settings.deviceId}',
+        );
       }
 
       // Clear proposal tracking when proposal is done
