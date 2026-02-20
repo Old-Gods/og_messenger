@@ -118,34 +118,36 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('🔐 Create Room Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'You are the first peer on this network. Create a password to secure the room.',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'You are the first peer on this network. Create a password to secure the room.',
+                style: TextStyle(fontSize: 14),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirm Password',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm Password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -258,31 +260,33 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('🔐 Enter Room Password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This room is password protected. Enter the password to join.',
-                style: TextStyle(fontSize: 14),
-              ),
-              if (_failedAttempts > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Failed attempts: $_failedAttempts/5',
-                  style: TextStyle(color: Colors.orange[700], fontSize: 12),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'This room is password protected. Enter the password to join.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                if (_failedAttempts > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Failed attempts: $_failedAttempts/5',
+                    style: TextStyle(color: Colors.orange[700], fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock),
+                  ),
                 ),
               ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-              ),
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -445,109 +449,94 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Image.asset(
-                            Theme.of(context).brightness == Brightness.dark
-                                ? 'images/og_messenger.dark.png'
-                                : 'images/og_messenger.png',
-                            height: 160,
-                          ),
-                          const SizedBox(height: 32),
-                          Text(
-                            'Welcome to OG Messenger',
-                            style: Theme.of(context).textTheme.headlineMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'A serverless LAN messenger for secure local communication',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 48),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Your Display Name',
-                              hintText: 'Enter your name',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.person),
-                            ),
-                            textInputAction: TextInputAction.done,
-                            onFieldSubmitted: (_) => _saveName(),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter your name';
-                              }
-                              if (value.trim().length < 2) {
-                                return 'Name must be at least 2 characters';
-                              }
-                              if (value.trim().length > 50) {
-                                return 'Name must be less than 50 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed:
-                                (_isLoading ||
-                                    _detectingPeers ||
-                                    _lockoutSeconds > 0)
-                                ? null
-                                : _saveName,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: _isLoading || _detectingPeers
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : _lockoutSeconds > 0
-                                ? Text(
-                                    'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
-                                  )
-                                : Text(
-                                    _detectingPeers
-                                        ? 'Detecting peers...'
-                                        : 'Get Started',
-                                  ),
-                          ),
-                          if (_detectingPeers) ...[
-                            const SizedBox(height: 16),
-                            const LinearProgressIndicator(),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Detecting peers on network...',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Image.asset(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? 'images/og_messenger.dark.png'
+                        : 'images/og_messenger.png',
+                    height: 160,
                   ),
-                );
-              },
+                  const SizedBox(height: 32),
+                  Text(
+                    'Welcome to OG Messenger',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'A serverless LAN messenger for secure local communication',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Your Display Name',
+                      hintText: 'Enter your name',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _saveName(),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your name';
+                      }
+                      if (value.trim().length < 2) {
+                        return 'Name must be at least 2 characters';
+                      }
+                      if (value.trim().length > 50) {
+                        return 'Name must be less than 50 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed:
+                        (_isLoading || _detectingPeers || _lockoutSeconds > 0)
+                        ? null
+                        : _saveName,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: _isLoading || _detectingPeers
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : _lockoutSeconds > 0
+                        ? Text(
+                            'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+                          )
+                        : Text(
+                            _detectingPeers
+                                ? 'Detecting peers...'
+                                : 'Get Started',
+                          ),
+                  ),
+                  if (_detectingPeers) ...[
+                    const SizedBox(height: 16),
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Detecting peers on network...',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
