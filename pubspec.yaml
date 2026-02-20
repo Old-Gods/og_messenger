@@ -24,5 +24,20 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.4.13
   json_serializable: ^6.8.0
+  flutter_launcher_icons: ^0.14.2
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  macos:
+    generate: true
+    image_path: "images/og_messenger_icon.png"
+  windows:
+    generate: true
+    image_path: "images/og_messenger_icon.png"
+  linux: true
+  image_path: "images/og_messenger_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "images/og_messenger_icon.png"
