@@ -46,7 +46,7 @@ jobs:
     concurrency:
       group: release-assets-${{ needs.release-github.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           path: .
           merge-multiple: true
