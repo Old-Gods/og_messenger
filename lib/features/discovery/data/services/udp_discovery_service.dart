@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
+import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
 class UdpDiscoveryService {
@@ -21,6 +22,7 @@ class UdpDiscoveryService {
   String? _deviceId;
   String? _deviceName;
   int? _tcpPort;
+  bool _listenOnly = false;
 
   /// Stream of discovered peers
   Stream<Map<String, Peer>> get peerStream => _peerController.stream;
@@ -39,12 +41,14 @@ class UdpDiscoveryService {
     required String deviceId,
     required String deviceName,
     required int tcpPort,
+    bool listenOnly = false,
   }) async {
     if (_isRunning) return false;
 
     _deviceId = deviceId;
     _deviceName = deviceName;
     _tcpPort = tcpPort;
+    _listenOnly = listenOnly;
 
     try {
       print('🔍 Starting UDP discovery...');
@@ -145,11 +149,13 @@ class UdpDiscoveryService {
         onError: (error) => _errorController.add('UDP error: $error'),
       );
 
-      // Start broadcasting beacons
-      _beaconTimer = Timer.periodic(
-        NetworkConstants.discoveryBeaconInterval,
-        (_) => _broadcastBeacon(),
-      );
+      // Start broadcasting beacons (unless in listen-only mode)
+      if (!_listenOnly) {
+        _beaconTimer = Timer.periodic(
+          NetworkConstants.discoveryBeaconInterval,
+          (_) => _broadcastBeacon(),
+        );
+      }
 
       // Start peer cleanup timer
       _cleanupTimer = Timer.periodic(
@@ -159,8 +165,10 @@ class UdpDiscoveryService {
 
       _isRunning = true;
 
-      // Send initial beacon immediately
-      _broadcastBeacon();
+      // Send initial beacon immediately (unless in listen-only mode)
+      if (!_listenOnly) {
+        _broadcastBeacon();
+      }
 
       return true;
     } catch (e, stackTrace) {
@@ -184,16 +192,26 @@ class UdpDiscoveryService {
     }
 
     try {
+      final securityService = SecurityService.instance;
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
+        passwordHash: securityService.passwordHash,
+        encryptedKey: securityService.encryptedKey, // Use encrypted version
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
       final beaconBytes = utf8.encode(beaconJson);
+
+      if (securityService.encryptedKey != null) {
+        print(
+          '📤 Broadcasting beacon with encrypted key length: ${securityService.encryptedKey!.length}',
+        );
+        print('   Beacon size: ${beaconBytes.length} bytes');
+      }
 
       _udpSocket!.send(
         beaconBytes,
@@ -226,6 +244,30 @@ class UdpDiscoveryService {
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
 
+      if (peer.encryptedKey != null) {
+        print(
+          '📥 Received beacon with encrypted key length: ${peer.encryptedKey!.length}',
+        );
+        print('   Encrypted key: ${peer.encryptedKey}');
+        print('   Datagram size: ${datagram.data.length} bytes');
+      }
+
+      // Validate password hash if we have one set
+      final securityService = SecurityService.instance;
+      if (securityService.hasPassword) {
+        // If peer has no password hash, reject them
+        if (peer.passwordHash == null || peer.passwordHash!.isEmpty) {
+          print('🚫 Rejected peer ${peer.deviceName}: No password hash');
+          return;
+        }
+
+        // If password hashes don't match, reject them
+        if (peer.passwordHash != securityService.passwordHash) {
+          print('🚫 Rejected peer ${peer.deviceName}: Password mismatch');
+          return;
+        }
+      }
+
       print(
         '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
       );
@@ -237,6 +279,8 @@ class UdpDiscoveryService {
         ipAddress: datagram.address.address,
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
+        passwordHash: peer.passwordHash,
+        encryptedKey: peer.encryptedKey,
       );
 
       // Add or update peer

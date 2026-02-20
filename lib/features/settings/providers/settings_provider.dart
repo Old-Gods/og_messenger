@@ -64,6 +64,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   /// Update user name
   Future<void> setUserName(String name, {bool skipBroadcast = false}) async {
     await _service.setUserName(name);
+    await _service.setFirstLaunchComplete();
     state = state.copyWith(userName: name, isFirstLaunch: false);
 
     // Only broadcast name change if explicitly allowed (not during first setup)

@@ -18,6 +18,9 @@ dependencies:
   json_annotation: ^4.11.0
   package_info_plus: ^9.0.0
   device_info_plus: ^12.3.0
+  crypto: ^3.0.5
+  encrypt: ^5.0.3
+  pointycastle: ^3.9.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -27,6 +30,9 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.2
 flutter:
   uses-material-design: true
+  assets:
+    - images/og_messenger.png
+    - images/og_messenger.dark.png
 flutter_launcher_icons:
   android: true
   ios: true
@@ -38,5 +44,10 @@ flutter_launcher_icons:
     image_path: images/og_messenger_icon.dark.png
   linux: true
   image_path: images/og_messenger_icon.dark.png
+  image_path_android: images/og_messenger_icon.png
+  image_path_ios: images/og_messenger_icon.dark.png
   adaptive_icon_background: '#FFFFFF'
-  adaptive_icon_foreground: images/og_messenger_icon.dark.png
+  adaptive_icon_foreground: images/og_messenger_icon.png
+  # Android adaptive icons with light/dark theme support
+  adaptive_icon_foreground_light: images/og_messenger_icon.png
+  adaptive_icon_foreground_dark: images/og_messenger_icon.dark.png

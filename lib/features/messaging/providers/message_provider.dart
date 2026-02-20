@@ -44,7 +44,7 @@ class MessageNotifier extends Notifier<MessageState> {
   @override
   MessageState build() {
     _repository = MessageRepository();
-    _tcpServer = TcpServerService();
+    _tcpServer = TcpServerService.instance;
 
     // Listen to incoming messages
     _tcpServer.messageStream.listen(_handleIncomingMessage);
