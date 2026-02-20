@@ -461,10 +461,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Icon(
-                            Icons.chat_bubble_outline,
-                            size: 80,
-                            color: Colors.blue,
+                          Image.asset(
+                            Theme.of(context).brightness == Brightness.dark
+                                ? 'images/og_messenger.dark.png'
+                                : 'images/og_messenger.png',
+                            height: 160,
                           ),
                           const SizedBox(height: 32),
                           Text(
