@@ -32,7 +32,6 @@ jobs:
         with:
           name: build-android
           path: ${{ env.BUILD_NAME }}
-          retention-days: 7
 
   build-ios:
     runs-on: macos-latest
@@ -54,7 +53,6 @@ jobs:
         with:
           name: build-ios
           path: ${{ env.BUILD_NAME }}
-          retention-days: 7
 
   build-linux:
     runs-on: ubuntu-latest
@@ -79,7 +77,6 @@ jobs:
         with:
           name: build-linux
           path: ${{ env.BUILD_NAME }}
-          retention-days: 7
 
   build-macos:
     runs-on: macos-latest
@@ -105,7 +102,6 @@ jobs:
         with:
           name: build-macos
           path: ${{ env.BUILD_NAME }}
-          retention-days: 7
 
   build-windows:
     runs-on: windows-latest
@@ -125,4 +121,3 @@ jobs:
         with:
           name: build-windows
           path: ${{ env.BUILD_NAME }}
-          retention-days: 7
