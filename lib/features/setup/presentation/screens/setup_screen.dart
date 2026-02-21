@@ -157,9 +157,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } catch (e) {
       setState(() => _detectingPeers = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to detect peers: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to detect peers: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     }
   }
@@ -211,14 +214,20 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
               if (password.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password cannot be empty')),
+                  SnackBar(
+                    content: const Text('Password cannot be empty'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
                 );
                 return;
               }
 
               if (password != confirm) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Passwords do not match')),
+                  SnackBar(
+                    content: const Text('Passwords do not match'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
                 );
                 return;
               }
@@ -268,9 +277,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } catch (e) {
       print('❌ Failed to setup first user: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to setup: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to setup: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     }
   }
@@ -310,7 +322,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               final password = passwordController.text;
               if (password.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password cannot be empty')),
+                  SnackBar(
+                    content: const Text('Password cannot be empty'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
                 );
                 return;
               }
@@ -420,9 +435,16 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             rootNavigator: true,
           ).pop(); // Close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Authentication timed out. Please try again.'),
+            SnackBar(
+              content: const Text(
+                'Authentication timed out. Please try again.',
+              ),
               backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
           );
         }
@@ -450,9 +472,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     } catch (e) {
       print('❌ Authentication failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Authentication failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Authentication failed: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     }
   }
@@ -491,10 +516,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         _authLockouts[peerKey] = DateTime.now();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Too many failed attempts. Please wait 5 minutes.'),
+            SnackBar(
+              content: const Text(
+                'Too many failed attempts. Please wait 5 minutes.',
+              ),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 5),
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
           );
         }
@@ -506,6 +538,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           SnackBar(
             content: Text('$message (${_authAttempts[peerKey]}/10 attempts)'),
             backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }
@@ -548,7 +585,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       print('❌ Failed to process auth response: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to process authentication: $e')),
+          SnackBar(
+            content: Text('Failed to process authentication: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
         );
       }
     } finally {
@@ -608,9 +648,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       await _detectPeers();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save name: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save name: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     } finally {
       if (mounted) {

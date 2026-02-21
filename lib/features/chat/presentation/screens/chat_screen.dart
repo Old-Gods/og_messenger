@@ -68,9 +68,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         print('❌ Failed to start TCP server');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to start messaging server'),
+            SnackBar(
+              content: const Text('Failed to start messaging server'),
               backgroundColor: Colors.red,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
           );
         }
@@ -102,6 +107,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 8),
+                action: SnackBarAction(
+                  label: 'Dismiss',
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
               ),
             );
           }
@@ -129,6 +139,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             content: Text('Error starting services: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }
@@ -147,6 +162,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           content: Text(
             'Message too large: ${(messageBytes / 1024).toStringAsFixed(1)}KB (max: ${NetworkConstants.maxMessageSizeBytes / 1024}KB)',
           ),
+          action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
         ),
       );
       return;
