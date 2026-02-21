@@ -298,14 +298,4 @@ class SecurityService {
 
   /// Get AES key as base64 string for network transmission
   String? get aesKeyBase64 => _aesKey != null ? base64Encode(_aesKey!) : null;
-
-  /// Get the actual password (stored as plain hash - for display only)
-  /// Note: We can't retrieve the original password, but we store a readable version
-  String? get storedPassword => _prefs?.getString('password_plaintext');
-
-  /// Store plaintext password (for display in settings)
-  Future<void> setPassword(String password) async {
-    await _prefs!.setString('password_plaintext', password);
-    await setPasswordHash(hashPassword(password));
-  }
 }

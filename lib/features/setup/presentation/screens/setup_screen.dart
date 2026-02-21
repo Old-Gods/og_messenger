@@ -221,7 +221,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       // Store password (both plain and hash)
       print('💾 Storing password...');
-      await securityService.setPassword(password);
+      await securityService.setPasswordHash(
+        securityService.hashPassword(password),
+      );
 
       // Mark as room creator
       print('👑 Marking as room creator...');
@@ -420,7 +422,9 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       // Store password
       print('💾 Storing password...');
-      await securityService.setPassword(password);
+      await securityService.setPasswordHash(
+        securityService.hashPassword(password),
+      );
 
       // Mark as not room creator
       await securityService.setIsRoomCreator(false);
