@@ -41,11 +41,16 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   void initState() {
     super.initState();
 
-    // Pre-populate name field if user has a saved name
-    final settings = ref.read(settingsProvider);
-    if (settings.userName != null && settings.userName!.isNotEmpty) {
-      _nameController.text = settings.userName!;
-    }
+    // Pre-populate name field if user has a saved name and check auth
+    // Delayed to next frame to ensure widget tree is built and ref is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final settings = ref.read(settingsProvider);
+        if (settings.userName != null && settings.userName!.isNotEmpty) {
+          _nameController.text = settings.userName!;
+        }
+      }
+    });
 
     // Check if already authenticated and skip to chat
     _checkExistingAuth();
