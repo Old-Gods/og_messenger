@@ -497,8 +497,10 @@ class TcpServerService {
       final response = {
         'type': 'auth_response',
         'success': success,
-        if (encryptedAesKey != null) 'encrypted_aes_key': encryptedAesKey,
-        if (message != null) 'message': message,
+        ...?encryptedAesKey != null
+            ? {'encrypted_aes_key': encryptedAesKey}
+            : null,
+        ...?message != null ? {'message': message} : null,
       };
 
       final responseJson = jsonEncode(response);
