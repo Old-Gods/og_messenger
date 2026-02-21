@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <!-- Location permissions needed for WiFi SSID (Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <!-- Android 13+ (API 33+) for local network discovery -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 

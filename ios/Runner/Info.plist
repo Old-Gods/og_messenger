@@ -68,6 +68,10 @@
 		</array>
 		<key>NSLocalNetworkUsageDescription</key>
 		<string>OG Messenger needs to discover and communicate with devices on your local network to enable serverless messaging.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>OG Messenger needs location permission to detect the WiFi network name for network-specific messaging.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>OG Messenger needs location permission to detect the WiFi network name for network-specific messaging.</string>
 		<key>NSBonjourServices</key>
 		<array>
 			<string>_og-messenger._udp</string>

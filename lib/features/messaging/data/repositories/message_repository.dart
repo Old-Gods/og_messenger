@@ -10,13 +10,18 @@ class MessageRepository {
     : _database = database ?? DatabaseService.instance;
 
   /// Save a message to the database
-  Future<void> saveMessage(Message message, String localDeviceId) async {
+  Future<void> saveMessage(
+    Message message,
+    String localDeviceId,
+    String networkId,
+  ) async {
     final schema = MessageSchema(
       uuid: message.uuid,
       timestampMicros: message.timestampMicros,
       senderId: message.senderId,
       senderName: message.senderName,
       content: message.content,
+      networkId: networkId,
     );
 
     try {
@@ -27,9 +32,12 @@ class MessageRepository {
     }
   }
 
-  /// Get all messages as domain entities
-  Future<List<Message>> getAllMessages(String localDeviceId) async {
-    final schemas = await _database.getAllMessages();
+  /// Get all messages for a specific network as domain entities
+  Future<List<Message>> getAllMessages(
+    String localDeviceId,
+    String networkId,
+  ) async {
+    final schemas = await _database.getAllMessages(networkId);
     return schemas.map((schema) {
       return Message(
         uuid: schema.uuid,
@@ -42,12 +50,13 @@ class MessageRepository {
     }).toList();
   }
 
-  /// Get messages from a specific sender
+  /// Get messages from a specific sender on a specific network
   Future<List<Message>> getMessagesBySender(
     String senderId,
     String localDeviceId,
+    String networkId,
   ) async {
-    final schemas = await _database.getMessagesBySender(senderId);
+    final schemas = await _database.getMessagesBySender(senderId, networkId);
     return schemas.map((schema) {
       return Message(
         uuid: schema.uuid,
@@ -60,12 +69,16 @@ class MessageRepository {
     }).toList();
   }
 
-  /// Get messages after a specific timestamp
+  /// Get messages after a specific timestamp for a specific network
   Future<List<Message>> getMessagesAfterTimestamp(
     int timestampMicros,
     String localDeviceId,
+    String networkId,
   ) async {
-    final schemas = await _database.getMessagesAfterTimestamp(timestampMicros);
+    final schemas = await _database.getMessagesAfterTimestamp(
+      timestampMicros,
+      networkId,
+    );
     return schemas.map((schema) {
       return Message(
         uuid: schema.uuid,
@@ -78,9 +91,9 @@ class MessageRepository {
     }).toList();
   }
 
-  /// Get the latest message timestamp
-  Future<int?> getLatestTimestamp() async {
-    return await _database.getLatestTimestamp();
+  /// Get the latest message timestamp for a specific network
+  Future<int?> getLatestTimestamp(String networkId) async {
+    return await _database.getLatestTimestamp(networkId);
   }
 
   /// Delete expired messages based on retention period
@@ -93,18 +106,22 @@ class MessageRepository {
     await _database.deleteMessage(uuid, senderId);
   }
 
-  /// Get total message count
-  Future<int> getMessageCount() async {
-    return await _database.getMessageCount();
+  /// Get total message count for a specific network
+  Future<int> getMessageCount(String networkId) async {
+    return await _database.getMessageCount(networkId);
   }
 
-  /// Clear all messages
-  Future<void> clearAllMessages() async {
-    await _database.clearAllMessages();
+  /// Clear all messages for a specific network
+  Future<void> clearAllMessages(String networkId) async {
+    await _database.clearAllMessages(networkId);
   }
 
-  /// Update sender name for all messages from a specific sender
-  Future<int> updateSenderName(String senderId, String newName) async {
-    return await _database.updateSenderName(senderId, newName);
+  /// Update sender name for all messages from a specific sender on a specific network
+  Future<int> updateSenderName(
+    String senderId,
+    String newName,
+    String networkId,
+  ) async {
+    return await _database.updateSenderName(senderId, newName, networkId);
   }
 }
