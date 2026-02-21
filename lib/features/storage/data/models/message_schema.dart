@@ -9,6 +9,7 @@ class MessageSchema {
   static const String columnSenderId = 'sender_id';
   static const String columnSenderName = 'sender_name';
   static const String columnContent = 'content';
+  static const String columnNetworkId = 'network_id';
 
   final int? id;
   final String uuid;
@@ -16,6 +17,7 @@ class MessageSchema {
   final String senderId;
   final String senderName;
   final String content;
+  final String networkId;
 
   MessageSchema({
     this.id,
@@ -24,6 +26,7 @@ class MessageSchema {
     required this.senderId,
     required this.senderName,
     required this.content,
+    required this.networkId,
   });
 
   /// Create table SQL
@@ -35,10 +38,12 @@ class MessageSchema {
       $columnTimestampMicros INTEGER NOT NULL,
       $columnSenderId TEXT NOT NULL,
       $columnSenderName TEXT NOT NULL,
-      $columnContent TEXT NOT NULL
+      $columnContent TEXT NOT NULL,
+      $columnNetworkId TEXT NOT NULL
     );
     CREATE INDEX idx_timestamp ON $tableName($columnTimestampMicros);
     CREATE INDEX idx_sender ON $tableName($columnSenderId);
+    CREATE INDEX idx_network ON $tableName($columnNetworkId);
     CREATE UNIQUE INDEX idx_uuid_sender ON $tableName($columnUuid, $columnSenderId);
   ''';
 
@@ -51,6 +56,7 @@ class MessageSchema {
       senderId: map[columnSenderId] as String,
       senderName: map[columnSenderName] as String,
       content: map[columnContent] as String,
+      networkId: map[columnNetworkId] as String,
     );
   }
 
@@ -63,6 +69,7 @@ class MessageSchema {
       columnSenderId: senderId,
       columnSenderName: senderName,
       columnContent: content,
+      columnNetworkId: networkId,
     };
   }
 

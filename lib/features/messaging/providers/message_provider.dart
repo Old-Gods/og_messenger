@@ -80,9 +80,12 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final messages = await _repository.getAllMessages(deviceId);
+      final networkId = settings.networkId;
+      final messages = await _repository.getAllMessages(deviceId, networkId);
 
-      print('📚 Loaded ${messages.length} messages from database');
+      print(
+        '📚 Loaded ${messages.length} messages from database (network: $networkId)',
+      );
       state = MessageState(messages: messages, isLoading: false);
     } catch (e) {
       print('❌ Failed to load messages: $e');
@@ -99,6 +102,7 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
+      final networkId = settings.networkId;
 
       // Check for duplicates (same UUID and sender)
       final isDuplicate = state.messages.any(
@@ -117,7 +121,7 @@ class MessageNotifier extends Notifier<MessageState> {
       );
 
       // Save to database
-      await _repository.saveMessage(message, deviceId);
+      await _repository.saveMessage(message, deviceId, networkId);
 
       // Update state
       final updatedMessages = [...state.messages, message];
@@ -276,9 +280,12 @@ class MessageNotifier extends Notifier<MessageState> {
       print('👤 Processing name change: $deviceId → "$newName"');
 
       // Update all messages from this sender in database
+      final settings = ref.read(settingsProvider);
+      final networkId = settings.networkId;
       final updatedCount = await _repository.updateSenderName(
         deviceId,
         newName,
+        networkId,
       );
       print('✅ Updated $updatedCount messages with new name');
 
@@ -483,7 +490,9 @@ class MessageNotifier extends Notifier<MessageState> {
       print('📤 Sending message: "$content"');
 
       // Save to database first
-      await _repository.saveMessage(message, deviceId);
+      final settings = ref.read(settingsProvider);
+      final networkId = settings.networkId;
+      await _repository.saveMessage(message, deviceId, networkId);
 
       // Update local state
       final updatedMessages = [...state.messages, message];
@@ -531,7 +540,9 @@ class MessageNotifier extends Notifier<MessageState> {
   /// Clear all messages
   Future<void> clearAllMessages() async {
     try {
-      await _repository.clearAllMessages();
+      final settings = ref.read(settingsProvider);
+      final networkId = settings.networkId;
+      await _repository.clearAllMessages(networkId);
       state = const MessageState();
     } catch (e) {
       state = state.copyWith(error: 'Failed to clear messages: $e');

@@ -25,7 +25,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Bump version for migration
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -38,7 +38,16 @@ class DatabaseService {
 
   /// Handle database upgrades
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migrations will go here
+    if (oldVersion < 2) {
+      // Add network_id column to existing messages table
+      await db.execute(
+        'ALTER TABLE ${MessageSchema.tableName} ADD COLUMN ${MessageSchema.columnNetworkId} TEXT NOT NULL DEFAULT "unknown"',
+      );
+      // Add index for network_id
+      await db.execute(
+        'CREATE INDEX idx_network ON ${MessageSchema.tableName}(${MessageSchema.columnNetworkId})',
+      );
+    }
   }
 
   /// Insert a new message
@@ -56,51 +65,61 @@ class DatabaseService {
     }
   }
 
-  /// Get all messages ordered by timestamp
-  Future<List<MessageSchema>> getAllMessages() async {
+  /// Get all messages for a specific network ordered by timestamp
+  Future<List<MessageSchema>> getAllMessages(String networkId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       MessageSchema.tableName,
+      where: '${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [networkId],
       orderBy: '${MessageSchema.columnTimestampMicros} ASC',
     );
 
     return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
   }
 
-  /// Get messages from a specific sender
-  Future<List<MessageSchema>> getMessagesBySender(String senderId) async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      MessageSchema.tableName,
-      where: '${MessageSchema.columnSenderId} = ?',
-      whereArgs: [senderId],
-      orderBy: '${MessageSchema.columnTimestampMicros} ASC',
-    );
-
-    return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
-  }
-
-  /// Get messages after a specific timestamp
-  Future<List<MessageSchema>> getMessagesAfterTimestamp(
-    int timestampMicros,
+  /// Get messages from a specific sender on a specific network
+  Future<List<MessageSchema>> getMessagesBySender(
+    String senderId,
+    String networkId,
   ) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       MessageSchema.tableName,
-      where: '${MessageSchema.columnTimestampMicros} > ?',
-      whereArgs: [timestampMicros],
+      where:
+          '${MessageSchema.columnSenderId} = ? AND ${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [senderId, networkId],
       orderBy: '${MessageSchema.columnTimestampMicros} ASC',
     );
 
     return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
   }
 
-  /// Get the most recent message timestamp (for sync purposes)
-  Future<int?> getLatestTimestamp() async {
+  /// Get messages after a specific timestamp for a specific network
+  Future<List<MessageSchema>> getMessagesAfterTimestamp(
+    int timestampMicros,
+    String networkId,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      MessageSchema.tableName,
+      where:
+          '${MessageSchema.columnTimestampMicros} > ? AND ${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [timestampMicros, networkId],
+      orderBy: '${MessageSchema.columnTimestampMicros} ASC',
+    );
+
+    return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
+  }
+
+  /// Get the most recent message timestamp for a specific network (for sync purposes)
+  Future<int?> getLatestTimestamp(String networkId) async {
     final db = await database;
     final List<Map<String, dynamic>> result = await db.query(
       MessageSchema.tableName,
       columns: [MessageSchema.columnTimestampMicros],
+      where: '${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [networkId],
       orderBy: '${MessageSchema.columnTimestampMicros} DESC',
       limit: 1,
     );
@@ -134,29 +153,39 @@ class DatabaseService {
     );
   }
 
-  /// Get total message count
-  Future<int> getMessageCount() async {
+  /// Get total message count for a specific network
+  Future<int> getMessageCount(String networkId) async {
     final db = await database;
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM ${MessageSchema.tableName}',
+      'SELECT COUNT(*) as count FROM ${MessageSchema.tableName} WHERE ${MessageSchema.columnNetworkId} = ?',
+      [networkId],
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
-  /// Clear all messages (for testing or reset purposes)
-  Future<int> clearAllMessages() async {
+  /// Clear all messages for a specific network (for testing or reset purposes)
+  Future<int> clearAllMessages(String networkId) async {
     final db = await database;
-    return await db.delete(MessageSchema.tableName);
+    return await db.delete(
+      MessageSchema.tableName,
+      where: '${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [networkId],
+    );
   }
 
-  /// Update sender name for all messages from a specific sender
-  Future<int> updateSenderName(String senderId, String newName) async {
+  /// Update sender name for all messages from a specific sender on a specific network
+  Future<int> updateSenderName(
+    String senderId,
+    String newName,
+    String networkId,
+  ) async {
     final db = await database;
     return await db.update(
       MessageSchema.tableName,
       {MessageSchema.columnSenderName: newName},
-      where: '${MessageSchema.columnSenderId} = ?',
-      whereArgs: [senderId],
+      where:
+          '${MessageSchema.columnSenderId} = ? AND ${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [senderId, networkId],
     );
   }
 
