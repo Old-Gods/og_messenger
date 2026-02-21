@@ -84,7 +84,7 @@ jobs:
   build-macos:
     runs-on: macos-latest
     env:
-      BUILD_NAME: OG-Messenger-macOS-${{ inputs.version }}.zip
+      BUILD_NAME: OG Messenger.${{ inputs.version }}.dmg
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
@@ -94,8 +94,12 @@ jobs:
       - run: flutter pub get
       - run: flutter build macos --release
       - run: | # shell
-          cd build/macos/Build/Products/Release
-          zip -r "../../../../../$BUILD_NAME" og_messenger.app
+          hdiutil create \
+            -volname "OG Messenger" \
+            -srcfolder "build/macos/Build/Products/Release/OG Messenger.app" \
+            -ov \
+            -format UDZO \
+            "${{ env.BUILD_NAME }}"
       - if: github.actor != 'dependabot[bot]'
         uses: actions/upload-artifact@v6
         with:
