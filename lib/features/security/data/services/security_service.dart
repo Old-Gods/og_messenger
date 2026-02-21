@@ -74,8 +74,8 @@ class SecurityService {
     );
 
     final pair = keyGen.generateKeyPair();
-    _privateKey = pair.privateKey as RSAPrivateKey;
-    _publicKey = pair.publicKey as RSAPublicKey;
+    _privateKey = pair.privateKey;
+    _publicKey = pair.publicKey;
 
     // Store keys
     await _prefs!.setString(
