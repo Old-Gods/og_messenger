@@ -83,8 +83,28 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         listenOnly: false, // Broadcast so other devices can see us
       );
 
-      // Wait 15 seconds to discover peers (increased to handle separate starts)
-      await Future.delayed(const Duration(seconds: 15));
+      // Poll for authenticated peers - exit early if found
+      // Otherwise wait up to 15 seconds (for split-brain scenarios)
+      bool foundAuthenticatedPeer = false;
+      for (int i = 0; i < 30; i++) {
+        // Check every 500ms for up to 15 seconds
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final currentPeers = discoveryService.discoveredPeers.values.toList();
+        final hasAuthenticatedPeer = currentPeers.any(
+          (p) => p.isAuthenticated && p.publicKey != null,
+        );
+
+        if (hasAuthenticatedPeer) {
+          foundAuthenticatedPeer = true;
+          print('✅ Found authenticated peer(s) after ${(i + 1) * 500}ms');
+          break;
+        }
+      }
+
+      if (!foundAuthenticatedPeer) {
+        print('⏱️ Completed peer discovery after 15 seconds');
+      }
 
       // Get discovered peers
       _discoveredPeers = discoveryService.discoveredPeers.values.toList();
