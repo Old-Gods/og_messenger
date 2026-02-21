@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/Old-Gods/og_messenger/compare/v1.0.2...v1.1.0) (2026-02-21)
+
+
+### Features
+
+* **chat:** enhance message bubble with dynamic color assignment and theming ([6f667cb](https://github.com/Old-Gods/og_messenger/commit/6f667cbfd95052bee2914e9deea1e64ccc8761f3))
+
+
+### Bug Fixes
+
+* **settings:** trim username and clamp retention days in SettingsService ([35fbbc8](https://github.com/Old-Gods/og_messenger/commit/35fbbc8c12598ae1df9283a997882b348b12bde3))
+
 ## [1.0.2](https://github.com/Old-Gods/og_messenger/compare/v1.0.1...v1.0.2) (2026-02-21)
 
 
