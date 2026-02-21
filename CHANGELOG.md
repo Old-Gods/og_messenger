@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1](https://github.com/Old-Gods/og_messenger/compare/v1.0.0...v1.0.1) (2026-02-21)
+
+
+### Bug Fixes
+
+* **auth:** clear authentication data on app startup to enforce re-authentication ([2075abc](https://github.com/Old-Gods/og_messenger/commit/2075abc1df1342244d78111e095793603af4c7b1))
+* **chat:** add focus management for message input field ([478d7c5](https://github.com/Old-Gods/og_messenger/commit/478d7c5e00b0550c793c4c3b2b55e588ef736e3a))
+* **setup:** improve peer discovery logic to handle authenticated peers more efficiently ([37fb748](https://github.com/Old-Gods/og_messenger/commit/37fb748e45899d0acb15daa240afbc95225d4b26))
+
 ## 1.0.0 (2026-02-21)
 
 
