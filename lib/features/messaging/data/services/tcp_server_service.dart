@@ -338,8 +338,13 @@ class TcpServerService {
       print('✅ Sync request sent successfully');
       return true;
     } catch (e) {
-      print('❌ Failed to send sync request to $peerAddress:$peerPort: $e');
-      _errorController.add('Failed to send sync request: $e');
+      // Connection refused is expected during peer startup - peer discovered via
+      // UDP but hasn't completed authentication/started TCP server yet.
+      // This is a benign race condition that resolves when peer completes setup.
+      // Don't show error to user, just log for debugging.
+      print(
+        '⚠️ Sync request to $peerAddress:$peerPort failed (peer may still be starting up): $e',
+      );
       return false;
     }
   }

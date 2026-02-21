@@ -24,12 +24,16 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   bool _isLoading = false;
   bool _detectingPeers = false;
   StreamSubscription? _authResponseSubscription;
+  Timer? _authTimeoutTimer;
   List<Peer> _discoveredPeers = [];
+  final Map<String, int> _authAttempts = {}; // Track auth attempts per peer
+  final Map<String, DateTime> _authLockouts = {}; // Track lockout times
 
   @override
   void dispose() {
     _nameController.dispose();
     _authResponseSubscription?.cancel();
+    _authTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -76,11 +80,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         deviceId: settings.deviceId!,
         deviceName: _nameController.text.trim(),
         tcpPort: 8888, // Temporary port
-        listenOnly: true,
+        listenOnly: false, // Broadcast so other devices can see us
       );
 
-      // Wait 8 seconds to discover peers
-      await Future.delayed(const Duration(seconds: 8));
+      // Wait 15 seconds to discover peers (increased to handle separate starts)
+      await Future.delayed(const Duration(seconds: 15));
 
       // Get discovered peers
       _discoveredPeers = discoveryService.discoveredPeers.values.toList();
@@ -103,18 +107,47 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             .where((p) => p.isAuthenticated && p.publicKey != null)
             .toList();
 
-        if (authenticatedPeers.isEmpty) {
-          // No authenticated peers - this shouldn't happen in normal flow
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Found peers but none are authenticated. '
-                  'Please ensure at least one peer is set up first.',
-                ),
-              ),
+        // Also check for unauthenticated peers (split-brain scenario)
+        final unauthenticatedPeers = _discoveredPeers
+            .where((p) => !p.isAuthenticated)
+            .toList();
+
+        if (authenticatedPeers.isEmpty && unauthenticatedPeers.isNotEmpty) {
+          // Split-brain scenario: Multiple devices starting simultaneously
+          // Use device ID tie-breaking: lowest device ID becomes first user
+          print(
+            '⚠️ Split-brain detected: ${unauthenticatedPeers.length + 1} devices starting simultaneously',
+          );
+
+          final settings = ref.read(settingsProvider);
+          final myDeviceId = settings.deviceId ?? '';
+          final allDeviceIds = [
+            myDeviceId,
+            ...unauthenticatedPeers.map((p) => p.deviceId),
+          ];
+          allDeviceIds.sort();
+
+          if (allDeviceIds.first == myDeviceId) {
+            print(
+              '🎲 Tie-breaker: I have the lowest device ID, becoming first user',
             );
+            await _showPasswordCreationDialog();
+          } else {
+            print(
+              '🎲 Tie-breaker: Waiting for device ${allDeviceIds.first} to initialize...',
+            );
+            // Wait and re-detect with longer timeout
+            await Future.delayed(const Duration(seconds: 5));
+            await _detectPeers();
           }
+        } else if (authenticatedPeers.isEmpty) {
+          // Found unauthenticated peers but none authenticated yet
+          // Wait for one to finish setup, then retry
+          print(
+            '⏳ Found unauthenticated peers, waiting for one to complete setup...',
+          );
+          await Future.delayed(const Duration(seconds: 5));
+          await _detectPeers();
         } else {
           // Found authenticated peers - subsequent user flow
           print('👥 Found ${authenticatedPeers.length} authenticated peer(s)');
@@ -296,6 +329,32 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   Future<void> _authenticateWithPeer(String password, Peer peer) async {
     try {
+      // Check rate limit
+      final peerKey = peer.deviceId;
+      final lockoutTime = _authLockouts[peerKey];
+
+      if (lockoutTime != null) {
+        final timeSinceLockout = DateTime.now().difference(lockoutTime);
+        if (timeSinceLockout.inMinutes < 5) {
+          final remainingMinutes = 5 - timeSinceLockout.inMinutes;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Please wait $remainingMinutes more minute(s) before trying again.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        } else {
+          // Lockout expired, clear it
+          _authLockouts.remove(peerKey);
+          _authAttempts.remove(peerKey);
+        }
+      }
+
       print('🔐 Authenticating with peer ${peer.deviceName}...');
       final settings = ref.read(settingsProvider);
       final securityService = SecurityService.instance;
@@ -352,6 +411,26 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       print('✅ Auth request sent, waiting for response...');
 
+      // Set up 30-second timeout
+      final timeoutTimer = Timer(const Duration(seconds: 30), () {
+        if (mounted) {
+          _authResponseSubscription?.cancel();
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication timed out. Please try again.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      });
+
+      // Store timer for cleanup
+      _authTimeoutTimer = timeoutTimer;
+
       // Show loading dialog
       if (mounted) {
         showDialog(
@@ -382,6 +461,14 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     Map<String, dynamic> response,
     String password,
   ) async {
+    // Cancel timeout timer
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
+
+    // Cancel auth response subscription
+    _authResponseSubscription?.cancel();
+    _authResponseSubscription = null;
+
     // Close loading dialog
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -392,10 +479,35 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     if (!success) {
       final message = response['message'] as String? ?? 'Authentication failed';
       print('❌ Auth failed: $message');
+
+      // Track failed attempts for rate limiting
+      final peerKey = _discoveredPeers.isNotEmpty
+          ? _discoveredPeers.first.deviceId
+          : 'unknown';
+      _authAttempts[peerKey] = (_authAttempts[peerKey] ?? 0) + 1;
+
+      // Check if rate limit exceeded (10 attempts)
+      if (_authAttempts[peerKey]! >= 10) {
+        _authLockouts[peerKey] = DateTime.now();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Too many failed attempts. Please wait 5 minutes.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$message (${_authAttempts[peerKey]}/10 attempts)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
       return;
     }

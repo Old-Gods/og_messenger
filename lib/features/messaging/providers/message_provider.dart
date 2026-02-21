@@ -196,16 +196,22 @@ class MessageNotifier extends Notifier<MessageState> {
         );
       }
 
-      await _tcpServer.sendSyncRequest(
+      final sent = await _tcpServer.sendSyncRequest(
         peerAddress,
         peerPort,
         deviceId,
         0, // Request all messages
       );
 
-      print('✅ Sync request sent to $peerAddress:$peerPort');
+      if (sent) {
+        print('✅ Sync request sent to $peerAddress:$peerPort');
+      } else {
+        print(
+          '⚠️ Sync request to $peerAddress:$peerPort deferred (peer still starting)',
+        );
+      }
     } catch (e) {
-      print('❌ Failed to request sync: $e');
+      print('⚠️ Failed to request sync: $e');
     }
   }
 
