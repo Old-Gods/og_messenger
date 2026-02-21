@@ -75,12 +75,15 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setUserName(String name, {bool skipBroadcast = false}) async {
     await _service.setUserName(name);
     await _service.setFirstLaunchComplete();
-    state = state.copyWith(userName: name, isFirstLaunch: false);
+    // Use the actual value from service (which is trimmed)
+    state = state.copyWith(userName: _service.userName, isFirstLaunch: false);
 
     // Only broadcast name change if explicitly allowed (not during first setup)
     if (!skipBroadcast) {
       try {
-        await ref.read(messageProvider.notifier).broadcastNameChange(name);
+        await ref
+            .read(messageProvider.notifier)
+            .broadcastNameChange(_service.userName!);
       } catch (e) {
         print('Could not broadcast name change: $e');
       }
@@ -90,7 +93,8 @@ class SettingsNotifier extends Notifier<SettingsState> {
   /// Update retention days
   Future<void> setRetentionDays(int days) async {
     await _service.setRetentionDays(days);
-    state = state.copyWith(retentionDays: days);
+    // Use the actual value from service (which is clamped)
+    state = state.copyWith(retentionDays: _service.retentionDays);
   }
 
   /// Refresh network ID (call when network changes)

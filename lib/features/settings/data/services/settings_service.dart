@@ -96,7 +96,9 @@ class SettingsService {
   /// Set the user's display name
   Future<bool> setUserName(String name) async {
     if (_prefs == null) return false;
-    return await _prefs!.setString(_keyUserName, name);
+    // Trim whitespace from username
+    final trimmedName = name.trim();
+    return await _prefs!.setString(_keyUserName, trimmedName);
   }
 
   /// Get the retention period in days
@@ -107,7 +109,12 @@ class SettingsService {
   /// Set the retention period in days
   Future<bool> setRetentionDays(int days) async {
     if (_prefs == null) return false;
-    return await _prefs!.setInt(_keyRetentionDays, days);
+    // Clamp retention days to valid range
+    final clampedDays = days.clamp(
+      AppConstants.minRetentionDays,
+      AppConstants.maxRetentionDays,
+    );
+    return await _prefs!.setInt(_keyRetentionDays, clampedDays);
   }
 
   /// Check if this is the first launch
