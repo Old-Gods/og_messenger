@@ -399,7 +399,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
               ),
-            Text(
+            SelectableText(
               message.content,
               style: TextStyle(
                 color: isOwn ? Colors.white : Colors.black87,
