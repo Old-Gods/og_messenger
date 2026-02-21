@@ -23,7 +23,6 @@ jobs:
       issues: write
       pull-requests: write
     outputs:
-      body: ${{ steps.release.outputs.body }}
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
@@ -54,6 +53,6 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          body: ${{ needs.release-github.outputs.body }}
+          draft: false
           tag_name: ${{ needs.release-github.outputs.tag_name }}
           files: ./*
