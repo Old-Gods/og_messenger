@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.2](https://github.com/Old-Gods/og_messenger/compare/v1.0.1...v1.0.2) (2026-02-21)
+
+
+### Bug Fixes
+
+* **app:** update product name to 'OG Messenger' in configuration files ([ae9c028](https://github.com/Old-Gods/og_messenger/commit/ae9c0286ff82d96cd66eab845d94ae78fed0fbd2))
+* **chat:** replace Text with SelectableText for message content ([5b53578](https://github.com/Old-Gods/og_messenger/commit/5b535788725b78c7132f7f310214800adbd9b51c))
+* **network:** integrate network info service and add location permissions for WiFi SSID detection ([661d323](https://github.com/Old-Gods/og_messenger/commit/661d323e3d7f0b4ff1d43233da2e867dfb5d7530))
+
 ## [1.0.1](https://github.com/Old-Gods/og_messenger/compare/v1.0.0...v1.0.1) (2026-02-21)
 
 
