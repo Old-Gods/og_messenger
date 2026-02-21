@@ -1,7 +1,7 @@
 name: og_messenger
 description: OG Messenger - A serverless LAN messenger for private networks
 publish_to: none
-version: 1.0.0
+version: 0.0.0
 environment:
   sdk: ^3.11.0
 dependencies:
