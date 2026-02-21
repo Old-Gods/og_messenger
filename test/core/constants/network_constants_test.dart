@@ -102,6 +102,80 @@ void main() {
           greaterThan(NetworkConstants.reconnectDelay.inSeconds),
         );
       });
+
+      test('has valid typing throttle interval', () {
+        expect(NetworkConstants.typingThrottleInterval, Duration(seconds: 3));
+        expect(
+          NetworkConstants.typingThrottleInterval.inSeconds,
+          greaterThan(0),
+        );
+      });
+
+      test('has valid typing timeout', () {
+        expect(NetworkConstants.typingTimeout, Duration(seconds: 5));
+        expect(NetworkConstants.typingTimeout.inSeconds, greaterThan(0));
+      });
+
+      test('typing timeout is longer than throttle interval', () {
+        expect(
+          NetworkConstants.typingTimeout.inSeconds,
+          greaterThan(NetworkConstants.typingThrottleInterval.inSeconds),
+        );
+      });
+    });
+
+    group('typing indicator configuration', () {
+      test('has valid typing display limit', () {
+        expect(NetworkConstants.typingDisplayLimit, 2);
+        expect(NetworkConstants.typingDisplayLimit, greaterThan(0));
+      });
+
+      test('typing display limit is reasonable', () {
+        expect(NetworkConstants.typingDisplayLimit, greaterThanOrEqualTo(1));
+        expect(NetworkConstants.typingDisplayLimit, lessThanOrEqualTo(5));
+      });
+
+      test('typing throttle prevents excessive network traffic', () {
+        // Throttle should be at least 1 second to avoid flooding
+        expect(
+          NetworkConstants.typingThrottleInterval.inSeconds,
+          greaterThanOrEqualTo(1),
+        );
+      });
+
+      test('typing timeout is reasonable for user experience', () {
+        // Timeout should be long enough to account for network delays
+        // but short enough to not show stale indicators
+        expect(
+          NetworkConstants.typingTimeout.inSeconds,
+          greaterThanOrEqualTo(3),
+        );
+        expect(NetworkConstants.typingTimeout.inSeconds, lessThanOrEqualTo(10));
+      });
+
+      test('typing configuration timing relationships are correct', () {
+        // Timeout must be longer than throttle to allow at least one refresh
+        expect(
+          NetworkConstants.typingTimeout,
+          greaterThan(NetworkConstants.typingThrottleInterval),
+        );
+
+        // Timeout should be at least 1.5x throttle for smooth experience
+        expect(
+          NetworkConstants.typingTimeout.inSeconds,
+          greaterThanOrEqualTo(
+            (NetworkConstants.typingThrottleInterval.inSeconds * 1.5).floor(),
+          ),
+        );
+      });
+
+      test('typing throttle aligns with discovery beacon interval', () {
+        // Typing throttle matches discovery beacon for consistency
+        expect(
+          NetworkConstants.typingThrottleInterval,
+          NetworkConstants.discoveryBeaconInterval,
+        );
+      });
     });
 
     group('message configuration', () {
