@@ -16,6 +16,12 @@ class NetworkConstants {
   static const Duration reconnectDelay = Duration(seconds: 5);
   static const Duration tcpHeartbeatInterval = Duration(seconds: 30);
 
+  // Typing Indicator Configuration
+  static const Duration typingThrottleInterval = Duration(seconds: 3);
+  static const Duration typingTimeout = Duration(seconds: 5);
+  static const int typingDisplayLimit =
+      2; // Max names to show before "and X others"
+
   // Message Configuration
   static const int maxMessageSizeBytes = 10 * 1024; // 10 KB
   static const int maxMessageSizeKB = 10;
