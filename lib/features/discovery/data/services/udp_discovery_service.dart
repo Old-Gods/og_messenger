@@ -43,7 +43,10 @@ class UdpDiscoveryService {
     required int tcpPort,
     bool listenOnly = false,
   }) async {
-    if (_isRunning) return false;
+    if (_isRunning) {
+      print('✅ UDP discovery already running');
+      return true; // Already running is success
+    }
 
     _deviceId = deviceId;
     _deviceName = deviceName;
@@ -199,19 +202,12 @@ class UdpDiscoveryService {
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
-        passwordHash: securityService.passwordHash,
-        encryptedKey: securityService.encryptedKey, // Use encrypted version
+        publicKey: securityService.publicKeyPem,
+        isAuthenticated: securityService.isAuthenticated,
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
       final beaconBytes = utf8.encode(beaconJson);
-
-      if (securityService.encryptedKey != null) {
-        print(
-          '📤 Broadcasting beacon with encrypted key length: ${securityService.encryptedKey!.length}',
-        );
-        print('   Beacon size: ${beaconBytes.length} bytes');
-      }
 
       _udpSocket!.send(
         beaconBytes,
@@ -244,30 +240,6 @@ class UdpDiscoveryService {
       // Don't add ourselves
       if (peer.deviceId == _deviceId) return;
 
-      if (peer.encryptedKey != null) {
-        print(
-          '📥 Received beacon with encrypted key length: ${peer.encryptedKey!.length}',
-        );
-        print('   Encrypted key: ${peer.encryptedKey}');
-        print('   Datagram size: ${datagram.data.length} bytes');
-      }
-
-      // Validate password hash if we have one set
-      final securityService = SecurityService.instance;
-      if (securityService.hasPassword) {
-        // If peer has no password hash, reject them
-        if (peer.passwordHash == null || peer.passwordHash!.isEmpty) {
-          print('🚫 Rejected peer ${peer.deviceName}: No password hash');
-          return;
-        }
-
-        // If password hashes don't match, reject them
-        if (peer.passwordHash != securityService.passwordHash) {
-          print('🚫 Rejected peer ${peer.deviceName}: Password mismatch');
-          return;
-        }
-      }
-
       print(
         '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
       );
@@ -279,8 +251,8 @@ class UdpDiscoveryService {
         ipAddress: datagram.address.address,
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
-        passwordHash: peer.passwordHash,
-        encryptedKey: peer.encryptedKey,
+        publicKey: peer.publicKey,
+        isAuthenticated: peer.isAuthenticated,
       );
 
       // Add or update peer

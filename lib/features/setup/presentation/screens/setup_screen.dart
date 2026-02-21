@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pointycastle/export.dart' as pc;
+import 'package:asn1lib/asn1lib.dart' as asn1;
 import '../../../settings/providers/settings_provider.dart';
-import '../../../security/data/services/security_service.dart';
 import '../../../discovery/data/services/udp_discovery_service.dart';
+import '../../../discovery/domain/entities/peer.dart';
+import '../../../security/data/services/security_service.dart';
+import '../../../messaging/data/services/tcp_server_service.dart';
 
 /// Screen for initial setup - collecting user's display name and password
 class SetupScreen extends ConsumerStatefulWidget {
@@ -18,42 +23,52 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _detectingPeers = false;
-  String? _detectedPasswordHash;
-  String? _detectedEncryptedKey;
-  String? _detectedSalt;
-  int _failedAttempts = 0;
-  int _lockoutSeconds = 0;
-  Timer? _lockoutTimer;
+  StreamSubscription? _authResponseSubscription;
+  Timer? _authTimeoutTimer;
+  List<Peer> _discoveredPeers = [];
+  final Map<String, int> _authAttempts = {}; // Track auth attempts per peer
+  final Map<String, DateTime> _authLockouts = {}; // Track lockout times
 
   @override
   void dispose() {
     _nameController.dispose();
-    _lockoutTimer?.cancel();
+    _authResponseSubscription?.cancel();
+    _authTimeoutTimer?.cancel();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
-    // Check lockout status on init
-    final securityService = SecurityService.instance;
-    if (securityService.isLockedOut) {
-      _lockoutSeconds = securityService.lockoutRemainingSeconds;
-      _startLockoutTimer();
-    }
-    _failedAttempts = securityService.failedAttempts;
-  }
 
-  void _startLockoutTimer() {
-    _lockoutTimer?.cancel();
-    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_lockoutSeconds > 0) {
-        setState(() => _lockoutSeconds--);
-      } else {
-        timer.cancel();
-        _lockoutTimer = null;
+    // Pre-populate name field if user has a saved name and check auth
+    // Delayed to next frame to ensure widget tree is built and ref is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final settings = ref.read(settingsProvider);
+        if (settings.userName != null && settings.userName!.isNotEmpty) {
+          _nameController.text = settings.userName!;
+        }
       }
     });
+
+    // Check if already authenticated and skip to chat
+    _checkExistingAuth();
+  }
+
+  Future<void> _checkExistingAuth() async {
+    final securityService = SecurityService.instance;
+    if (securityService.isAuthenticated) {
+      print('🔐 Already authenticated, skipping to chat');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pushReplacementNamed('/chat');
+        }
+      });
+    }
   }
 
   Future<void> _detectPeers() async {
@@ -65,46 +80,94 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       final settings = ref.read(settingsProvider);
       final discoveryService = UdpDiscoveryService();
 
-      // Start discovery temporarily (listen-only mode to avoid broadcasting unauthenticated)
+      // Start discovery temporarily
       await discoveryService.start(
         deviceId: settings.deviceId!,
         deviceName: _nameController.text.trim(),
         tcpPort: 8888, // Temporary port
-        listenOnly: true, // Don't broadcast while unauthenticated
+        listenOnly: false, // Broadcast so other devices can see us
       );
 
-      // Wait 8 seconds to discover peers
-      await Future.delayed(const Duration(seconds: 8));
+      // Wait 15 seconds to discover peers (increased to handle separate starts)
+      await Future.delayed(const Duration(seconds: 15));
 
-      final peers = discoveryService.discoveredPeers;
+      // Get discovered peers
+      _discoveredPeers = discoveryService.discoveredPeers.values.toList();
 
       // Stop discovery
       await discoveryService.stop();
 
-      if (peers.isEmpty) {
-        // First peer - needs to create password
-        setState(() {
-          _detectingPeers = false;
-        });
-        _showPasswordCreationDialog();
+      setState(() {
+        _detectingPeers = false;
+      });
+
+      // Check if peers were found
+      if (_discoveredPeers.isEmpty) {
+        // No peers found - first user flow
+        print('👤 No peers found - setting up as first user');
+        await _showPasswordCreationDialog();
       } else {
-        // Subsequent peer - needs to enter password
-        final firstPeer = peers.values.first;
-        setState(() {
-          _detectedPasswordHash = firstPeer.passwordHash;
-          _detectedEncryptedKey = firstPeer.encryptedKey;
-          _detectedSalt =
-              firstPeer.deviceId; // Use first peer's device ID as salt
-          _detectingPeers = false;
-        });
-        _showPasswordEntryDialog();
+        // Peers found - check if any are authenticated with public keys
+        final authenticatedPeers = _discoveredPeers
+            .where((p) => p.isAuthenticated && p.publicKey != null)
+            .toList();
+
+        // Also check for unauthenticated peers (split-brain scenario)
+        final unauthenticatedPeers = _discoveredPeers
+            .where((p) => !p.isAuthenticated)
+            .toList();
+
+        if (authenticatedPeers.isEmpty && unauthenticatedPeers.isNotEmpty) {
+          // Split-brain scenario: Multiple devices starting simultaneously
+          // Use device ID tie-breaking: lowest device ID becomes first user
+          print(
+            '⚠️ Split-brain detected: ${unauthenticatedPeers.length + 1} devices starting simultaneously',
+          );
+
+          final settings = ref.read(settingsProvider);
+          final myDeviceId = settings.deviceId ?? '';
+          final allDeviceIds = [
+            myDeviceId,
+            ...unauthenticatedPeers.map((p) => p.deviceId),
+          ];
+          allDeviceIds.sort();
+
+          if (allDeviceIds.first == myDeviceId) {
+            print(
+              '🎲 Tie-breaker: I have the lowest device ID, becoming first user',
+            );
+            await _showPasswordCreationDialog();
+          } else {
+            print(
+              '🎲 Tie-breaker: Waiting for device ${allDeviceIds.first} to initialize...',
+            );
+            // Wait and re-detect with longer timeout
+            await Future.delayed(const Duration(seconds: 5));
+            await _detectPeers();
+          }
+        } else if (authenticatedPeers.isEmpty) {
+          // Found unauthenticated peers but none authenticated yet
+          // Wait for one to finish setup, then retry
+          print(
+            '⏳ Found unauthenticated peers, waiting for one to complete setup...',
+          );
+          await Future.delayed(const Duration(seconds: 5));
+          await _detectPeers();
+        } else {
+          // Found authenticated peers - subsequent user flow
+          print('👥 Found ${authenticatedPeers.length} authenticated peer(s)');
+          await _showPasswordEntryDialog(authenticatedPeers.first);
+        }
       }
     } catch (e) {
       setState(() => _detectingPeers = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to detect peers: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to detect peers: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     }
   }
@@ -113,37 +176,34 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     final passwordController = TextEditingController();
     final confirmController = TextEditingController();
 
-    final password = await showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('🔐 Create Room Password'),
+        title: const Text('Create Room Password'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'You are the first peer on this network. Create a password to secure the room.',
-              style: TextStyle(fontSize: 14),
+              'You are the first user. Create a password for this chat room.',
             ),
             const SizedBox(height: 16),
             TextField(
               controller: passwordController,
-              obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
               ),
+              obscureText: true,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: confirmController,
-              obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Confirm Password',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
               ),
+              obscureText: true,
             ),
           ],
         ),
@@ -152,26 +212,32 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
-              final pwd = passwordController.text;
+              final password = passwordController.text;
               final confirm = confirmController.text;
 
-              if (pwd.isEmpty) {
+              if (password.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password cannot be empty')),
+                  SnackBar(
+                    content: const Text('Password cannot be empty'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
                 );
                 return;
               }
 
-              if (pwd != confirm) {
+              if (password != confirm) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Passwords do not match')),
+                  SnackBar(
+                    content: const Text('Passwords do not match'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
                 );
                 return;
               }
 
-              Navigator.of(context).pop(pwd);
+              Navigator.of(context).pop(password);
             },
             child: const Text('Create'),
           ),
@@ -179,218 +245,380 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       ),
     );
 
-    if (password != null && password.isNotEmpty) {
-      await _setupRoomCreator(password);
+    if (result != null && mounted) {
+      await _setupFirstUser(result);
     }
   }
 
-  Future<void> _setupRoomCreator(String password) async {
+  Future<void> _setupFirstUser(String password) async {
     try {
+      print('🔧 Setting up first user...');
       final securityService = SecurityService.instance;
-      final settings = ref.read(settingsProvider);
 
-      // Hash password
-      final passwordHash = securityService.hashPassword(password);
+      // Clear any old auth data
+      await securityService.clearSecurityData();
 
-      // Generate random AES encryption key
-      final encryptionKey = securityService.generateRandomKey();
+      // Generate RSA key pair
+      print('🔑 Generating RSA key pair...');
+      await securityService.generateKeyPair();
 
-      // Encrypt the AES key with the password for broadcasting
-      print('🔑 Encrypting key for broadcasting...');
-      print('   Device ID (salt): ${settings.deviceId}');
-      print('   Password length: ${password.length}');
+      // Generate AES key for messages
+      print('🔐 Generating AES key...');
+      await securityService.generateAesKey();
 
-      final encryptedKey = securityService.encryptKeyWithPassword(
-        encryptionKey,
-        password,
-        settings.deviceId!, // Use device ID as salt
+      // Store password (both plain and hash)
+      print('💾 Storing password...');
+      await securityService.setPasswordHash(
+        securityService.hashPassword(password),
       );
 
-      print('   Encrypted key: $encryptedKey');
-
-      // Store credentials
-      await securityService.setPasswordHash(passwordHash);
-      await securityService.setEncryptionKey(encryptionKey);
-      await securityService.setEncryptedKey(
-        encryptedKey,
-      ); // Store encrypted version
+      // Mark as room creator
+      print('👑 Marking as room creator...');
       await securityService.setIsRoomCreator(true);
-      await securityService.setRoomCreatedTimestamp(
-        DateTime.now().millisecondsSinceEpoch,
-      );
 
-      // Save name and complete setup
+      print('✅ First user setup complete!');
+
       await _completeSaveName();
     } catch (e) {
+      print('❌ Failed to setup first user: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to create room: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to setup: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     }
   }
 
-  Future<void> _showPasswordEntryDialog() async {
-    final securityService = SecurityService.instance;
+  Future<void> _showPasswordEntryDialog(Peer peer) async {
+    final passwordController = TextEditingController();
 
-    // Check if locked out
-    if (securityService.isLockedOut) {
-      _lockoutSeconds = securityService.lockoutRemainingSeconds;
-      _startLockoutTimer();
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Room Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Enter the password to join the chat room with ${peer.deviceName}.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final password = passwordController.text;
+              if (password.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Password cannot be empty'),
+                    action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+                  ),
+                );
+                return;
+              }
+              Navigator.of(context).pop(password);
+            },
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      await _authenticateWithPeer(result, peer);
+    }
+  }
+
+  Future<void> _authenticateWithPeer(String password, Peer peer) async {
+    try {
+      // Check rate limit
+      final peerKey = peer.deviceId;
+      final lockoutTime = _authLockouts[peerKey];
+
+      if (lockoutTime != null) {
+        final timeSinceLockout = DateTime.now().difference(lockoutTime);
+        if (timeSinceLockout.inMinutes < 5) {
+          final remainingMinutes = 5 - timeSinceLockout.inMinutes;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Please wait $remainingMinutes more minute(s) before trying again.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        } else {
+          // Lockout expired, clear it
+          _authLockouts.remove(peerKey);
+          _authAttempts.remove(peerKey);
+        }
+      }
+
+      print('🔐 Authenticating with peer ${peer.deviceName}...');
+      final settings = ref.read(settingsProvider);
+      final securityService = SecurityService.instance;
+      final tcpServer = TcpServerService.instance;
+
+      // Start TCP server to receive auth response
+      if (!tcpServer.isRunning) {
+        print('🚀 Starting TCP server...');
+        final started = await tcpServer.start();
+        if (!started) {
+          throw Exception('Failed to start TCP server');
+        }
+        print('✅ TCP server started on port ${tcpServer.actualPort}');
+      }
+
+      // Generate our own RSA key pair
+      print('🔑 Generating RSA key pair...');
+      await securityService.generateKeyPair();
+
+      // Hash the entered password
+      final passwordHash = securityService.hashPassword(password);
+      print('🔒 Password hashed');
+
+      // Encrypt password hash with peer's public key
+      print('🔐 Encrypting password hash with peer\'s public key...');
+      final encryptedPasswordHash = _encryptWithPeerPublicKey(
+        passwordHash,
+        peer.publicKey!,
+        securityService,
+      );
+
+      // Listen for auth response
+      _authResponseSubscription = tcpServer.authResponseStream.listen((
+        response,
+      ) {
+        _handleAuthResponse(response, password);
+      });
+
+      // Send auth request to peer
+      print('📤 Sending auth request to ${peer.ipAddress}:${peer.tcpPort}');
+      final success = await tcpServer.sendAuthRequest(
+        peerAddress: peer.ipAddress,
+        peerPort: peer.tcpPort,
+        deviceId: settings.deviceId!,
+        deviceName: _nameController.text.trim(),
+        encryptedPasswordHash: encryptedPasswordHash,
+        publicKey: securityService.publicKeyPem!,
+        tcpPort: tcpServer.actualPort ?? 8888,
+      );
+
+      if (!success) {
+        throw Exception('Failed to send auth request');
+      }
+
+      print('✅ Auth request sent, waiting for response...');
+
+      // Set up 30-second timeout
+      final timeoutTimer = Timer(const Duration(seconds: 30), () {
+        if (mounted) {
+          _authResponseSubscription?.cancel();
+          Navigator.of(
+            context,
+            rootNavigator: true,
+          ).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Authentication timed out. Please try again.',
+              ),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
+        }
+      });
+
+      // Store timer for cleanup
+      _authTimeoutTimer = timeoutTimer;
+
+      // Show loading dialog
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text('Authenticating...'),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Authentication failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Too many failed attempts. Locked out for ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
+            content: Text('Authentication failed: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleAuthResponse(
+    Map<String, dynamic> response,
+    String password,
+  ) async {
+    // Cancel timeout timer
+    _authTimeoutTimer?.cancel();
+    _authTimeoutTimer = null;
+
+    // Cancel auth response subscription
+    _authResponseSubscription?.cancel();
+    _authResponseSubscription = null;
+
+    // Close loading dialog
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    final success = response['success'] as bool;
+
+    if (!success) {
+      final message = response['message'] as String? ?? 'Authentication failed';
+      print('❌ Auth failed: $message');
+
+      // Track failed attempts for rate limiting
+      final peerKey = _discoveredPeers.isNotEmpty
+          ? _discoveredPeers.first.deviceId
+          : 'unknown';
+      _authAttempts[peerKey] = (_authAttempts[peerKey] ?? 0) + 1;
+
+      // Check if rate limit exceeded (10 attempts)
+      if (_authAttempts[peerKey]! >= 10) {
+        _authLockouts[peerKey] = DateTime.now();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Too many failed attempts. Please wait 5 minutes.',
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Dismiss',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
             ),
-            duration: const Duration(seconds: 3),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$message (${_authAttempts[peerKey]}/10 attempts)'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }
       return;
     }
 
-    final passwordController = TextEditingController();
+    try {
+      print('✅ Authentication successful!');
+      final encryptedAesKey = response['encrypted_aes_key'] as String?;
 
-    final password = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('🔐 Enter Room Password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This room is password protected. Enter the password to join.',
-                style: TextStyle(fontSize: 14),
-              ),
-              if (_failedAttempts > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Failed attempts: $_failedAttempts/5',
-                  style: TextStyle(color: Colors.orange[700], fontSize: 12),
-                ),
-              ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-              ),
-            ],
+      if (encryptedAesKey == null) {
+        throw Exception('No AES key received');
+      }
+
+      // Decrypt AES key with our private key
+      print('🔓 Decrypting AES key...');
+      final securityService = SecurityService.instance;
+      final decryptedAesKeyBase64 = securityService.decryptWithPrivateKey(
+        encryptedAesKey,
+      );
+      final aesKey = base64Decode(decryptedAesKeyBase64);
+
+      // Store AES key
+      print('💾 Storing AES key...');
+      await securityService.setAesKey(aesKey);
+
+      // Store password
+      print('💾 Storing password...');
+      await securityService.setPasswordHash(
+        securityService.hashPassword(password),
+      );
+
+      // Mark as not room creator
+      await securityService.setIsRoomCreator(false);
+
+      print('✅ Authentication complete!');
+
+      await _completeSaveName();
+    } catch (e) {
+      print('❌ Failed to process auth response: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to process authentication: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(passwordController.text),
-              child: const Text('Join'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (password != null && password.isNotEmpty) {
-      await _verifyAndJoinRoom(password);
+        );
+      }
+    } finally {
+      _authResponseSubscription?.cancel();
     }
   }
 
-  Future<void> _verifyAndJoinRoom(String password) async {
-    try {
-      final securityService = SecurityService.instance;
+  String _encryptWithPeerPublicKey(
+    String plaintext,
+    String peerPublicKeyPem,
+    SecurityService securityService,
+  ) {
+    // Parse peer's public key from PEM format
+    final base64String = peerPublicKeyPem.replaceAll('PUBLIC:', '');
+    final bytes = base64Decode(base64String);
+    final asn1Parser = asn1.ASN1Parser(bytes);
+    final seq = asn1Parser.nextObject() as asn1.ASN1Sequence;
 
-      // Hash entered password
-      final enteredHash = securityService.hashPassword(password);
+    final peerPublicKey = pc.RSAPublicKey(
+      (seq.elements[0] as asn1.ASN1Integer).valueAsBigInteger, // modulus
+      (seq.elements[1] as asn1.ASN1Integer).valueAsBigInteger, // exponent
+    );
 
-      // Verify against detected hash
-      if (enteredHash != _detectedPasswordHash) {
-        // Wrong password
-        await securityService.incrementFailedAttempts();
-        setState(() => _failedAttempts = securityService.failedAttempts);
-
-        if (securityService.isLockedOut) {
-          _lockoutSeconds = securityService.lockoutRemainingSeconds;
-          _startLockoutTimer();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Too many failed attempts. Locked out for 5 minutes.',
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Incorrect password'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          // Show dialog again
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) _showPasswordEntryDialog();
-          });
-        }
-        return;
-      }
-
-      // Correct password - decrypt encryption key
-      if (_detectedEncryptedKey != null && _detectedSalt != null) {
-        print('🔑 Attempting to decrypt key...');
-        print('   Encrypted key: $_detectedEncryptedKey');
-        print('   Salt (device ID): $_detectedSalt');
-        print('   Password length: ${password.length}');
-
-        final decryptedKey = securityService.decryptKeyWithPassword(
-          _detectedEncryptedKey!,
-          password,
-          _detectedSalt!,
-        );
-
-        if (decryptedKey != null) {
-          print('✅ Successfully decrypted encryption key');
-
-          // Store credentials
-          await securityService.setPasswordHash(enteredHash);
-          await securityService.setEncryptionKey(decryptedKey);
-          await securityService.setEncryptedKey(
-            _detectedEncryptedKey!,
-          ); // Store encrypted version too
-          await securityService.setIsRoomCreator(false);
-          await securityService.resetFailedAttempts();
-
-          print('✅ Credentials stored, completing setup...');
-
-          // Save name and complete setup
-          await _completeSaveName();
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to decrypt encryption key')),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to join room: $e')));
-      }
-    }
+    // Encrypt with peer's public key
+    return securityService.encryptWithPublicKey(plaintext, peerPublicKey);
   }
 
   Future<void> _completeSaveName() async {
@@ -402,21 +630,16 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     print('🔧 Username saved, navigating to chat...');
 
     // Navigate to chat screen after setup is complete
-    // Use root navigator and wait a frame to ensure state is updated
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          print('🚀 Attempting navigation to /chat');
+          print('🚀 Navigating to /chat');
           Navigator.of(
             context,
             rootNavigator: true,
           ).pushReplacementNamed('/chat');
-        } else {
-          print('❌ Widget not mounted, cannot navigate');
         }
       });
-    } else {
-      print('❌ Widget not mounted before postFrameCallback');
     }
   }
 
@@ -430,9 +653,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       await _detectPeers();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save name: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save name: $e'),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -445,109 +671,85 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Image.asset(
-                            Theme.of(context).brightness == Brightness.dark
-                                ? 'images/og_messenger.dark.png'
-                                : 'images/og_messenger.png',
-                            height: 160,
-                          ),
-                          const SizedBox(height: 32),
-                          Text(
-                            'Welcome to OG Messenger',
-                            style: Theme.of(context).textTheme.headlineMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'A serverless LAN messenger for secure local communication',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 48),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Your Display Name',
-                              hintText: 'Enter your name',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.person),
-                            ),
-                            textInputAction: TextInputAction.done,
-                            onFieldSubmitted: (_) => _saveName(),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter your name';
-                              }
-                              if (value.trim().length < 2) {
-                                return 'Name must be at least 2 characters';
-                              }
-                              if (value.trim().length > 50) {
-                                return 'Name must be less than 50 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          ElevatedButton(
-                            onPressed:
-                                (_isLoading ||
-                                    _detectingPeers ||
-                                    _lockoutSeconds > 0)
-                                ? null
-                                : _saveName,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: _isLoading || _detectingPeers
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : _lockoutSeconds > 0
-                                ? Text(
-                                    'Locked: ${_lockoutSeconds ~/ 60}:${(_lockoutSeconds % 60).toString().padLeft(2, '0')}',
-                                  )
-                                : Text(
-                                    _detectingPeers
-                                        ? 'Detecting peers...'
-                                        : 'Get Started',
-                                  ),
-                          ),
-                          if (_detectingPeers) ...[
-                            const SizedBox(height: 16),
-                            const LinearProgressIndicator(),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Detecting peers on network...',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Image.asset(
+                    Theme.of(context).brightness == Brightness.dark
+                        ? 'images/og_messenger.dark.png'
+                        : 'images/og_messenger.png',
+                    height: 160,
                   ),
-                );
-              },
+                  const SizedBox(height: 32),
+                  Text(
+                    'Welcome to OG Messenger',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'A serverless LAN messenger for secure local communication',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Your Display Name',
+                      hintText: 'Enter your name',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _saveName(),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your name';
+                      }
+                      if (value.trim().length < 2) {
+                        return 'Name must be at least 2 characters';
+                      }
+                      if (value.trim().length > 50) {
+                        return 'Name must be less than 50 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: (_isLoading || _detectingPeers)
+                        ? null
+                        : _saveName,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: _isLoading || _detectingPeers
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Get Started'),
+                  ),
+                  if (_detectingPeers) ...[
+                    const SizedBox(height: 16),
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Detecting peers on network...',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

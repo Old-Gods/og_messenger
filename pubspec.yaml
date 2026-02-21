@@ -1,7 +1,7 @@
 name: og_messenger
 description: OG Messenger - A serverless LAN messenger for private networks
 publish_to: none
-version: 1.5.0
+version: 0.0.1
 environment:
   sdk: ^3.11.0
 dependencies:
@@ -19,8 +19,8 @@ dependencies:
   package_info_plus: ^9.0.0
   device_info_plus: ^12.3.0
   crypto: ^3.0.5
-  encrypt: ^5.0.3
   pointycastle: ^3.9.1
+  asn1lib: ^1.5.5
 dev_dependencies:
   flutter_test:
     sdk: flutter

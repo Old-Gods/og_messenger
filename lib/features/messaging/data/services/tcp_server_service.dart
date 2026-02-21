@@ -14,6 +14,8 @@ class TcpServerService {
   ServerSocket? _serverSocket;
   int? _actualPort;
   final Map<String, Socket> _connectedPeers = {};
+  final Map<String, StringBuffer> _peerBuffers =
+      {}; // Buffer for incomplete messages
   final StreamController<Message> _messageController =
       StreamController<Message>.broadcast();
   final StreamController<String> _errorController =
@@ -22,9 +24,9 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _nameChangeController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _passwordProposalController =
+  final StreamController<Map<String, dynamic>> _authRequestController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _passwordVoteController =
+  final StreamController<Map<String, dynamic>> _authResponseController =
       StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
@@ -43,13 +45,13 @@ class TcpServerService {
   Stream<Map<String, dynamic>> get nameChangeStream =>
       _nameChangeController.stream;
 
-  /// Stream of password change proposals
-  Stream<Map<String, dynamic>> get passwordProposalStream =>
-      _passwordProposalController.stream;
+  /// Stream of auth requests
+  Stream<Map<String, dynamic>> get authRequestStream =>
+      _authRequestController.stream;
 
-  /// Stream of password change votes
-  Stream<Map<String, dynamic>> get passwordVoteStream =>
-      _passwordVoteController.stream;
+  /// Stream of auth responses
+  Stream<Map<String, dynamic>> get authResponseStream =>
+      _authResponseController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -59,7 +61,10 @@ class TcpServerService {
 
   /// Start the TCP server with auto-incrementing port
   Future<bool> start() async {
-    if (_isRunning) return false;
+    if (_isRunning) {
+      print('✅ TCP server already running on port $_actualPort');
+      return true; // Already running is success
+    }
 
     for (
       int attempt = 0;
@@ -108,6 +113,7 @@ class TcpServerService {
   void _handleConnection(Socket socket) {
     final peerId = '${socket.remoteAddress.address}:${socket.remotePort}';
     _connectedPeers[peerId] = socket;
+    _peerBuffers[peerId] = StringBuffer(); // Initialize buffer for this peer
     print('🔗 New connection from $peerId');
 
     socket.listen(
@@ -123,109 +129,130 @@ class TcpServerService {
 
   /// Handle incoming data from peer
   void _handleData(Socket socket, List<int> data) {
+    final peerId = '${socket.remoteAddress.address}:${socket.remotePort}';
+    final buffer = _peerBuffers[peerId];
+
+    if (buffer == null) return;
+
     try {
-      final message = utf8.decode(data);
-      final lines = message.split('\n');
+      // Append incoming data to buffer
+      final chunk = utf8.decode(data, allowMalformed: true);
+      buffer.write(chunk);
+
+      // Process complete messages (separated by newlines)
+      final bufferContent = buffer.toString();
+      final lines = bufferContent.split('\n');
+
+      // Keep the last incomplete line in the buffer
+      buffer.clear();
+      if (!bufferContent.endsWith('\n') && lines.isNotEmpty) {
+        buffer.write(lines.last);
+        lines.removeLast();
+      }
 
       for (final line in lines) {
         if (line.trim().isEmpty) continue;
 
-        final json = jsonDecode(line);
-
-        // Check if this is a sync request
-        if (json['type'] == 'sync_request') {
-          print('🔄 Received sync request');
-          _syncRequestController.add({
-            'address': socket.remoteAddress.address,
-            'port': json['tcp_port'] as int,
-            'since_timestamp': json['since_timestamp'] as int,
-          });
+        try {
+          final json = jsonDecode(line);
+          _processMessage(socket, json);
+        } catch (e) {
+          print('⚠️  Failed to parse JSON: $e');
+          print('   Line length: ${line.length} characters');
+          // Don't show error to user - just log it
           continue;
         }
-
-        // Check if this is a name change notification
-        if (json['type'] == 'name_change') {
-          print('👤 Received name change notification');
-          _nameChangeController.add({
-            'device_id': json['device_id'] as String,
-            'new_name': json['new_name'] as String,
-          });
-          continue;
-        }
-
-        // Check if this is a password change proposal
-        if (json['type'] == 'password_proposal') {
-          print('🔐 Received password change proposal');
-          _passwordProposalController.add({
-            'proposal_id': json['proposal_id'] as String,
-            'proposer_device_id': json['proposer_device_id'] as String,
-            'proposer_name': json['proposer_name'] as String,
-            'timestamp': json['timestamp'] as int,
-            'new_password': json['new_password'] as String,
-            'new_password_hash': json['new_password_hash'] as String,
-            'new_encrypted_key': json['new_encrypted_key'] as String,
-            'key_salt': json['key_salt'] as String,
-            'required_peers': (json['required_peers'] as List).cast<String>(),
-          });
-          continue;
-        }
-
-        // Check if this is a password change vote
-        if (json['type'] == 'password_vote') {
-          print('✅ Received password change vote');
-          _passwordVoteController.add({
-            'proposal_id': json['proposal_id'] as String,
-            'voter_device_id': json['voter_device_id'] as String,
-            'voter_name': json['voter_name'] as String,
-            'vote': json['vote'] as bool,
-          });
-          continue;
-        }
-
-        // Otherwise, it's a regular message
-        final parsedMessage = Message.fromJson(json);
-
-        // Decrypt message content if security is enabled
-        final securityService = SecurityService.instance;
-        Message finalMessage = parsedMessage;
-
-        if (securityService.hasPassword &&
-            securityService.encryptionKey != null) {
-          try {
-            final decryptedContent = securityService.decryptMessage(
-              parsedMessage.content,
-            );
-            finalMessage = Message(
-              uuid: parsedMessage.uuid,
-              timestampMicros: parsedMessage.timestampMicros,
-              senderId: parsedMessage.senderId,
-              senderName: parsedMessage.senderName,
-              content: decryptedContent,
-              isOutgoing: parsedMessage.isOutgoing,
-            );
-          } catch (e) {
-            print('⚠️ Failed to decrypt message: $e');
-            // Keep original message if decryption fails
-          }
-        }
-
-        print(
-          '📨 Received message from ${finalMessage.senderName}: ${finalMessage.content}',
-        );
-
-        // Validate message size
-        final messageBytes = utf8.encode(line);
-        if (messageBytes.length > NetworkConstants.maxMessageSizeBytes) {
-          _errorController.add(
-            'Rejected oversized message: ${messageBytes.length} bytes',
-          );
-          continue;
-        }
-
-        _messageController.add(finalMessage);
       }
     } catch (e) {
-      _errorController.add('Failed to parse message: $e');
+      print('❌ Error handling data from $peerId: $e');
+      // Clear buffer on error to prevent corruption
+      buffer.clear();
+    }
+  }
+
+  /// Process a parsed JSON message
+  void _processMessage(Socket socket, Map<String, dynamic> json) {
+    try {
+      // Check if this is a sync request
+      if (json['type'] == 'sync_request') {
+        print('🔄 Received sync request');
+        _syncRequestController.add({
+          'address': socket.remoteAddress.address,
+          'port': json['tcp_port'] as int,
+          'since_timestamp': json['since_timestamp'] as int,
+        });
+        return;
+      }
+
+      // Check if this is a name change notification
+      if (json['type'] == 'name_change') {
+        print('👤 Received name change notification');
+        _nameChangeController.add({
+          'device_id': json['device_id'] as String,
+          'new_name': json['new_name'] as String,
+        });
+        return;
+      }
+
+      // Check if this is an auth request
+      if (json['type'] == 'auth_request') {
+        print('🔐 Received auth request');
+        _authRequestController.add({
+          'device_id': json['device_id'] as String,
+          'device_name': json['device_name'] as String,
+          'encrypted_password_hash': json['encrypted_password_hash'] as String,
+          'public_key': json['public_key'] as String,
+          'peer_address': socket.remoteAddress.address,
+          'peer_port': json['tcp_port'] as int,
+        });
+        return;
+      }
+
+      // Check if this is an auth response
+      if (json['type'] == 'auth_response') {
+        print('✅ Received auth response');
+        _authResponseController.add({
+          'success': json['success'] as bool,
+          'encrypted_aes_key': json['encrypted_aes_key'] as String?,
+          'message': json['message'] as String?,
+        });
+        return;
+      }
+
+      // Otherwise, it's a regular message
+      final parsedMessage = Message.fromJson(json);
+
+      // Decrypt message if we're authenticated
+      final securityService = SecurityService.instance;
+      Message finalMessage = parsedMessage;
+
+      if (securityService.hasAesKey) {
+        try {
+          final decryptedContent = securityService.decryptMessage(
+            parsedMessage.content,
+          );
+          finalMessage = Message(
+            uuid: parsedMessage.uuid,
+            timestampMicros: parsedMessage.timestampMicros,
+            senderId: parsedMessage.senderId,
+            senderName: parsedMessage.senderName,
+            content: decryptedContent,
+            isOutgoing: parsedMessage.isOutgoing,
+          );
+        } catch (e) {
+          print('⚠️ Failed to decrypt message: $e');
+          // Keep original message if decryption fails
+        }
+      }
+
+      print(
+        '📨 Received message from ${finalMessage.senderName}: ${finalMessage.content}',
+      );
+
+      _messageController.add(finalMessage);
+    } catch (e) {
+      print('⚠️ Failed to process message: $e');
+      // Don't add to error controller - this prevents showing errors to users
     }
   }
 
@@ -236,12 +263,11 @@ class TcpServerService {
     Message message,
   ) async {
     try {
-      // Encrypt message content if security is enabled
+      // Encrypt message if we're authenticated
       final securityService = SecurityService.instance;
       Message messageToSend = message;
 
-      if (securityService.hasPassword &&
-          securityService.encryptionKey != null) {
+      if (securityService.hasAesKey) {
         try {
           final encryptedContent = securityService.encryptMessage(
             message.content,
@@ -312,8 +338,13 @@ class TcpServerService {
       print('✅ Sync request sent successfully');
       return true;
     } catch (e) {
-      print('❌ Failed to send sync request to $peerAddress:$peerPort: $e');
-      _errorController.add('Failed to send sync request: $e');
+      // Connection refused is expected during peer startup - peer discovered via
+      // UDP but hasn't completed authentication/started TCP server yet.
+      // This is a benign race condition that resolves when peer completes setup.
+      // Don't show error to user, just log for debugging.
+      print(
+        '⚠️ Sync request to $peerAddress:$peerPort failed (peer may still be starting up): $e',
+      );
       return false;
     }
   }
@@ -410,10 +441,86 @@ class TcpServerService {
   void _removePeer(String peerId) {
     final socket = _connectedPeers.remove(peerId);
     socket?.close();
+    _peerBuffers.remove(peerId); // Clean up buffer
+    print('🔌 Peer disconnected: $peerId');
   }
 
   /// Get count of connected peers
   int get connectedPeerCount => _connectedPeers.length;
+
+  /// Send authentication request to a peer
+  Future<bool> sendAuthRequest({
+    required String peerAddress,
+    required int peerPort,
+    required String deviceId,
+    required String deviceName,
+    required String encryptedPasswordHash,
+    required String publicKey,
+    required int tcpPort,
+  }) async {
+    try {
+      final request = {
+        'type': 'auth_request',
+        'device_id': deviceId,
+        'device_name': deviceName,
+        'encrypted_password_hash': encryptedPasswordHash,
+        'public_key': publicKey,
+        'tcp_port': tcpPort,
+      };
+
+      final requestJson = jsonEncode(request);
+      print('📤 Sending auth request to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$requestJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Auth request sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send auth request to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send auth request: $e');
+      return false;
+    }
+  }
+
+  /// Send authentication response to a peer
+  Future<bool> sendAuthResponse({
+    required String peerAddress,
+    required int peerPort,
+    required bool success,
+    String? encryptedAesKey,
+    String? message,
+  }) async {
+    try {
+      final response = {
+        'type': 'auth_response',
+        'success': success,
+        ...?encryptedAesKey != null
+            ? {'encrypted_aes_key': encryptedAesKey}
+            : null,
+        ...?message != null ? {'message': message} : null,
+      };
+
+      final responseJson = jsonEncode(response);
+      print(
+        '📤 Sending auth response to $peerAddress:$peerPort (success: $success)',
+      );
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$responseJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Auth response sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send auth response to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send auth response: $e');
+      return false;
+    }
+  }
 
   /// Stop the TCP server
   Future<void> stop() async {
@@ -440,7 +547,7 @@ class TcpServerService {
     _errorController.close();
     _syncRequestController.close();
     _nameChangeController.close();
-    _passwordProposalController.close();
-    _passwordVoteController.close();
+    _authRequestController.close();
+    _authResponseController.close();
   }
 }

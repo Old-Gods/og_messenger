@@ -2,38 +2,55 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart' as encrypt_pkg;
 import 'package:pointycastle/export.dart';
+import 'package:asn1lib/asn1lib.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Service for managing room security, encryption, and password validation
+/// Service for managing authentication and encryption
+/// Uses RSA key pairs for authentication and AES for message encryption
 class SecurityService {
-  static const String _keyPasswordHash = 'room_password_hash';
-  static const String _keyEncryptionKey = 'room_encryption_key';
-  static const String _keyEncryptedKey =
-      'room_encrypted_key'; // Encrypted version for broadcasting
+  static const String _keyPasswordHash = 'password_hash';
+  static const String _keyPrivateKey = 'private_key';
+  static const String _keyPublicKey = 'public_key';
+  static const String _keyAesKey = 'aes_key';
   static const String _keyIsRoomCreator = 'is_room_creator';
-  static const String _keyRoomCreatedTimestamp = 'room_created_timestamp';
-  static const String _keyFailedAttempts = 'failed_attempts';
-  static const String _keyLockoutUntil = 'lockout_until';
 
   static final SecurityService instance = SecurityService._();
   SharedPreferences? _prefs;
-  encrypt_pkg.Key? _encryptionKey;
+
+  // In-memory keys for performance
+  RSAPrivateKey? _privateKey;
+  RSAPublicKey? _publicKey;
+  Uint8List? _aesKey;
 
   SecurityService._();
 
   /// Initialize the security service
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
-    _loadEncryptionKey();
+    _loadKeys();
   }
 
-  /// Load encryption key from storage
-  void _loadEncryptionKey() {
-    final keyBase64 = _prefs?.getString(_keyEncryptionKey);
-    if (keyBase64 != null && keyBase64.isNotEmpty) {
-      _encryptionKey = encrypt_pkg.Key.fromBase64(keyBase64);
+  /// Load keys from storage into memory
+  void _loadKeys() {
+    if (_prefs == null) return;
+
+    // Load private key
+    final privateKeyPem = _prefs!.getString(_keyPrivateKey);
+    if (privateKeyPem != null) {
+      _privateKey = _parsePrivateKeyFromPem(privateKeyPem);
+    }
+
+    // Load public key
+    final publicKeyPem = _prefs!.getString(_keyPublicKey);
+    if (publicKeyPem != null) {
+      _publicKey = _parsePublicKeyFromPem(publicKeyPem);
+    }
+
+    // Load AES key
+    final aesKeyBase64 = _prefs!.getString(_keyAesKey);
+    if (aesKeyBase64 != null) {
+      _aesKey = base64Decode(aesKeyBase64);
     }
   }
 
@@ -44,254 +61,241 @@ class SecurityService {
     return hash.toString();
   }
 
-  /// Derive an encryption key from a password using PBKDF2
-  /// Used to encrypt/decrypt the AES key with the password
-  encrypt_pkg.Key deriveKeyFromPassword(String password, String salt) {
-    final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64));
-    derivator.init(
-      Pbkdf2Parameters(
-        utf8.encode(salt),
-        10000, // iterations
-        32, // key length (256 bits)
+  /// Generate RSA key pair (2048-bit)
+  Future<void> generateKeyPair() async {
+    final keyGen = RSAKeyGenerator();
+    final secureRandom = _getSecureRandom();
+
+    keyGen.init(
+      ParametersWithRandom(
+        RSAKeyGeneratorParameters(BigInt.from(65537), 2048, 64),
+        secureRandom,
       ),
     );
-    final key = derivator.process(utf8.encode(password));
-    return encrypt_pkg.Key(key);
+
+    final pair = keyGen.generateKeyPair();
+    _privateKey = pair.privateKey as RSAPrivateKey;
+    _publicKey = pair.publicKey as RSAPublicKey;
+
+    // Store keys
+    await _prefs!.setString(
+      _keyPrivateKey,
+      _encodePrivateKeyToPem(_privateKey!),
+    );
+    await _prefs!.setString(_keyPublicKey, _encodePublicKeyToPem(_publicKey!));
   }
 
-  /// Generate a random AES-256 encryption key
-  encrypt_pkg.Key generateRandomKey() {
+  /// Generate random AES-256 key for message encryption
+  Future<void> generateAesKey() async {
     final secureRandom = Random.secure();
-    final keyBytes = List<int>.generate(32, (_) => secureRandom.nextInt(256));
-    return encrypt_pkg.Key(Uint8List.fromList(keyBytes));
-  }
-
-  /// Encrypt the AES key with a password-derived key
-  String encryptKeyWithPassword(
-    encrypt_pkg.Key aesKey,
-    String password,
-    String salt,
-  ) {
-    print('🔒 Encrypting key...');
-    print('   Password: $password');
-    print('   Salt: $salt');
-
-    final passwordKey = deriveKeyFromPassword(password, salt);
-    print('   Derived key from password: ${passwordKey.base64}');
-
-    final encrypter = encrypt_pkg.Encrypter(
-      encrypt_pkg.AES(passwordKey, mode: encrypt_pkg.AESMode.gcm),
+    _aesKey = Uint8List.fromList(
+      List<int>.generate(32, (_) => secureRandom.nextInt(256)),
     );
-    final iv = encrypt_pkg.IV.fromSecureRandom(16);
-    final encrypted = encrypter.encrypt(aesKey.base64, iv: iv);
-
-    final result = '${iv.base64}:${encrypted.base64}';
-    print('   Result: $result');
-    print('   Result length: ${result.length}');
-
-    return result;
+    await _prefs!.setString(_keyAesKey, base64Encode(_aesKey!));
   }
 
-  /// Decrypt the AES key with a password-derived key
-  encrypt_pkg.Key? decryptKeyWithPassword(
-    String encryptedKey,
-    String password,
-    String salt,
-  ) {
-    try {
-      print('🔓 Decrypting key...');
-      print('   Encrypted key: $encryptedKey');
-      print('   Password: $password');
-      print('   Salt: $salt');
-
-      final parts = encryptedKey.split(':');
-      if (parts.length != 2) {
-        print('❌ Invalid format: expected IV:data');
-        return null;
-      }
-
-      print('   IV part: ${parts[0]}');
-      print('   Encrypted part: ${parts[1]}');
-      print('   Encrypted part length: ${parts[1].length}');
-
-      final iv = encrypt_pkg.IV.fromBase64(parts[0]);
-      final encrypted = encrypt_pkg.Encrypted.fromBase64(parts[1]);
-      final passwordKey = deriveKeyFromPassword(password, salt);
-
-      print('   Derived key from password: ${passwordKey.base64}');
-
-      final encrypter = encrypt_pkg.Encrypter(
-        encrypt_pkg.AES(passwordKey, mode: encrypt_pkg.AESMode.gcm),
-      );
-      final decrypted = encrypter.decrypt(encrypted, iv: iv);
-
-      print('   Decrypted value: $decrypted');
-      print('   Decrypted length: ${decrypted.length}');
-
-      return encrypt_pkg.Key.fromBase64(decrypted);
-    } catch (e, stackTrace) {
-      print('❌ Failed to decrypt key: $e');
-      print('Stack trace: $stackTrace');
-      return null;
+  /// Get secure random for key generation
+  SecureRandom _getSecureRandom() {
+    final secureRandom = SecureRandom('Fortuna');
+    final seedSource = Random.secure();
+    final seeds = <int>[];
+    for (int i = 0; i < 32; i++) {
+      seeds.add(seedSource.nextInt(255));
     }
+    secureRandom.seed(KeyParameter(Uint8List.fromList(seeds)));
+    return secureRandom;
   }
 
-  /// Encrypt a message using the room's AES key
+  /// Encrypt data with RSA public key
+  String encryptWithPublicKey(String plaintext, RSAPublicKey publicKey) {
+    final encryptor = OAEPEncoding(RSAEngine())
+      ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey));
+
+    final plainBytes = utf8.encode(plaintext);
+    final encrypted = _processInBlocks(encryptor, plainBytes);
+    return base64Encode(encrypted);
+  }
+
+  /// Encrypt data with RSA public key from PEM format
+  String encryptWithPublicKeyPem(String plaintext, String publicKeyPem) {
+    final publicKey = _parsePublicKeyFromPem(publicKeyPem);
+    return encryptWithPublicKey(plaintext, publicKey);
+  }
+
+  /// Decrypt data with RSA private key
+  String decryptWithPrivateKey(String ciphertext) {
+    if (_privateKey == null) {
+      throw Exception('No private key available');
+    }
+
+    final decryptor = OAEPEncoding(RSAEngine())
+      ..init(false, PrivateKeyParameter<RSAPrivateKey>(_privateKey!));
+
+    final cipherBytes = base64Decode(ciphertext);
+    final decrypted = _processInBlocks(decryptor, cipherBytes);
+    return utf8.decode(decrypted);
+  }
+
+  /// Process data in blocks for RSA encryption/decryption
+  Uint8List _processInBlocks(AsymmetricBlockCipher cipher, Uint8List data) {
+    final chunks = <Uint8List>[];
+    final blockSize = cipher.inputBlockSize;
+
+    for (int offset = 0; offset < data.length; offset += blockSize) {
+      final end = (offset + blockSize < data.length)
+          ? offset + blockSize
+          : data.length;
+      chunks.add(cipher.process(Uint8List.sublistView(data, offset, end)));
+    }
+
+    return Uint8List.fromList(chunks.expand((x) => x).toList());
+  }
+
+  /// Encrypt message with AES key
   String encryptMessage(String plaintext) {
-    if (_encryptionKey == null) {
-      throw Exception('No encryption key set');
+    if (_aesKey == null) {
+      throw Exception('No AES key available');
     }
 
-    final encrypter = encrypt_pkg.Encrypter(
-      encrypt_pkg.AES(_encryptionKey!, mode: encrypt_pkg.AESMode.gcm),
-    );
-    final iv = encrypt_pkg.IV.fromSecureRandom(16);
-    final encrypted = encrypter.encrypt(plaintext, iv: iv);
-    return '${iv.base64}:${encrypted.base64}';
+    final key = KeyParameter(_aesKey!);
+    final iv = _generateIV();
+
+    final cipher = GCMBlockCipher(AESEngine())
+      ..init(true, AEADParameters(key, 128, iv, Uint8List(0)));
+
+    final plainBytes = utf8.encode(plaintext);
+    final encrypted = cipher.process(plainBytes);
+
+    // Prepend IV to encrypted data
+    final result = Uint8List(iv.length + encrypted.length);
+    result.setRange(0, iv.length, iv);
+    result.setRange(iv.length, result.length, encrypted);
+
+    return base64Encode(result);
   }
 
-  /// Decrypt a message using the room's AES key
+  /// Decrypt message with AES key
   String decryptMessage(String ciphertext) {
-    if (_encryptionKey == null) {
-      throw Exception('No encryption key set');
+    if (_aesKey == null) {
+      throw Exception('No AES key available');
     }
 
-    try {
-      final parts = ciphertext.split(':');
-      if (parts.length != 2) {
-        throw Exception('Invalid ciphertext format');
-      }
+    final data = base64Decode(ciphertext);
+    final iv = data.sublist(0, 16);
+    final encrypted = data.sublist(16);
 
-      final iv = encrypt_pkg.IV.fromBase64(parts[0]);
-      final encrypted = encrypt_pkg.Encrypted.fromBase64(parts[1]);
-      final encrypter = encrypt_pkg.Encrypter(
-        encrypt_pkg.AES(_encryptionKey!, mode: encrypt_pkg.AESMode.gcm),
-      );
-      return encrypter.decrypt(encrypted, iv: iv);
-    } catch (e) {
-      print('❌ Failed to decrypt message: $e');
-      // Return original ciphertext to prevent crashes, mark as error
-      return '[Encrypted - Unable to decrypt]';
-    }
+    final key = KeyParameter(_aesKey!);
+    final cipher = GCMBlockCipher(AESEngine())
+      ..init(false, AEADParameters(key, 128, iv, Uint8List(0)));
+
+    final decrypted = cipher.process(encrypted);
+    return utf8.decode(decrypted);
   }
 
-  /// Get current password hash
-  String? get passwordHash {
-    return _prefs?.getString(_keyPasswordHash);
+  /// Generate random IV for AES
+  Uint8List _generateIV() {
+    final secureRandom = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(16, (_) => secureRandom.nextInt(256)),
+    );
   }
 
-  /// Set password hash
-  Future<bool> setPasswordHash(String hash) async {
-    if (_prefs == null) return false;
-    return await _prefs!.setString(_keyPasswordHash, hash);
+  /// Encode private key to PEM format
+  String _encodePrivateKeyToPem(RSAPrivateKey key) {
+    final asn1 = ASN1Sequence();
+    asn1.add(ASN1Integer(BigInt.from(0))); // version
+    asn1.add(ASN1Integer(key.modulus!));
+    asn1.add(ASN1Integer(key.publicExponent!));
+    asn1.add(ASN1Integer(key.privateExponent!));
+    asn1.add(ASN1Integer(key.p!));
+    asn1.add(ASN1Integer(key.q!));
+    asn1.add(ASN1Integer(key.privateExponent! % (key.p! - BigInt.one)));
+    asn1.add(ASN1Integer(key.privateExponent! % (key.q! - BigInt.one)));
+    asn1.add(ASN1Integer(key.q!.modInverse(key.p!)));
+
+    final bytes = asn1.encodedBytes;
+    final base64String = base64Encode(bytes);
+    return 'PRIVATE:$base64String';
   }
 
-  /// Set encryption key
-  Future<bool> setEncryptionKey(encrypt_pkg.Key key) async {
-    if (_prefs == null) return false;
-    _encryptionKey = key;
-    return await _prefs!.setString(_keyEncryptionKey, key.base64);
+  /// Encode public key to PEM format
+  String _encodePublicKeyToPem(RSAPublicKey key) {
+    final asn1 = ASN1Sequence();
+    asn1.add(ASN1Integer(key.modulus!));
+    asn1.add(ASN1Integer(key.exponent!));
+
+    final bytes = asn1.encodedBytes;
+    final base64String = base64Encode(bytes);
+    return 'PUBLIC:$base64String';
   }
 
-  /// Get encryption key
-  encrypt_pkg.Key? get encryptionKey => _encryptionKey;
+  /// Parse private key from PEM format
+  RSAPrivateKey _parsePrivateKeyFromPem(String pem) {
+    final base64String = pem.replaceAll('PRIVATE:', '');
+    final bytes = base64Decode(base64String);
+    final asn1 = ASN1Parser(bytes).nextObject() as ASN1Sequence;
 
-  /// Get encrypted key (for broadcasting)
-  String? get encryptedKey {
-    return _prefs?.getString(_keyEncryptedKey);
+    return RSAPrivateKey(
+      (asn1.elements[1] as ASN1Integer).valueAsBigInteger, // modulus
+      (asn1.elements[3] as ASN1Integer).valueAsBigInteger, // privateExponent
+      (asn1.elements[4] as ASN1Integer).valueAsBigInteger, // p
+      (asn1.elements[5] as ASN1Integer).valueAsBigInteger, // q
+    );
   }
 
-  /// Set encrypted key (for broadcasting)
-  Future<bool> setEncryptedKey(String encryptedKey) async {
-    if (_prefs == null) return false;
-    return await _prefs!.setString(_keyEncryptedKey, encryptedKey);
+  /// Parse public key from PEM format
+  RSAPublicKey _parsePublicKeyFromPem(String pem) {
+    final base64String = pem.replaceAll('PUBLIC:', '');
+    final bytes = base64Decode(base64String);
+    final asn1 = ASN1Parser(bytes).nextObject() as ASN1Sequence;
+
+    return RSAPublicKey(
+      (asn1.elements[0] as ASN1Integer).valueAsBigInteger, // modulus
+      (asn1.elements[1] as ASN1Integer).valueAsBigInteger, // exponent
+    );
   }
 
-  /// Check if password is set
-  bool get hasPassword {
-    return passwordHash != null && passwordHash!.isNotEmpty;
+  /// Store AES key (received from another peer)
+  Future<void> setAesKey(Uint8List key) async {
+    _aesKey = key;
+    await _prefs!.setString(_keyAesKey, base64Encode(key));
   }
 
-  /// Verify password
-  bool verifyPassword(String password) {
-    final hash = hashPassword(password);
-    return hash == passwordHash;
-  }
-
-  /// Get if this device is the room creator
-  bool get isRoomCreator {
-    return _prefs?.getBool(_keyIsRoomCreator) ?? false;
+  /// Store password hash
+  Future<void> setPasswordHash(String hash) async {
+    await _prefs!.setString(_keyPasswordHash, hash);
   }
 
   /// Set if this device is the room creator
-  Future<bool> setIsRoomCreator(bool value) async {
-    if (_prefs == null) return false;
-    return await _prefs!.setBool(_keyIsRoomCreator, value);
-  }
-
-  /// Get room created timestamp
-  int? get roomCreatedTimestamp {
-    return _prefs?.getInt(_keyRoomCreatedTimestamp);
-  }
-
-  /// Set room created timestamp
-  Future<bool> setRoomCreatedTimestamp(int timestamp) async {
-    if (_prefs == null) return false;
-    return await _prefs!.setInt(_keyRoomCreatedTimestamp, timestamp);
-  }
-
-  /// Get failed password attempts
-  int get failedAttempts {
-    return _prefs?.getInt(_keyFailedAttempts) ?? 0;
-  }
-
-  /// Increment failed attempts
-  Future<void> incrementFailedAttempts() async {
-    if (_prefs == null) return;
-    final current = failedAttempts;
-    await _prefs!.setInt(_keyFailedAttempts, current + 1);
-
-    // Lock out after 5 failed attempts
-    if (current + 1 >= 5) {
-      final lockoutUntil = DateTime.now()
-          .add(const Duration(minutes: 5))
-          .millisecondsSinceEpoch;
-      await _prefs!.setInt(_keyLockoutUntil, lockoutUntil);
-    }
-  }
-
-  /// Reset failed attempts
-  Future<void> resetFailedAttempts() async {
-    if (_prefs == null) return;
-    await _prefs!.remove(_keyFailedAttempts);
-    await _prefs!.remove(_keyLockoutUntil);
-  }
-
-  /// Check if user is locked out
-  bool get isLockedOut {
-    final lockoutUntil = _prefs?.getInt(_keyLockoutUntil);
-    if (lockoutUntil == null) return false;
-    return DateTime.now().millisecondsSinceEpoch < lockoutUntil;
-  }
-
-  /// Get remaining lockout time in seconds
-  int get lockoutRemainingSeconds {
-    final lockoutUntil = _prefs?.getInt(_keyLockoutUntil);
-    if (lockoutUntil == null) return 0;
-    final remaining = lockoutUntil - DateTime.now().millisecondsSinceEpoch;
-    return remaining > 0 ? (remaining / 1000).ceil() : 0;
+  Future<void> setIsRoomCreator(bool isCreator) async {
+    await _prefs!.setBool(_keyIsRoomCreator, isCreator);
   }
 
   /// Clear all security data
   Future<void> clearSecurityData() async {
-    if (_prefs == null) return;
     await _prefs!.remove(_keyPasswordHash);
-    await _prefs!.remove(_keyEncryptionKey);
-    await _prefs!.remove(_keyEncryptedKey);
+    await _prefs!.remove(_keyPrivateKey);
+    await _prefs!.remove(_keyPublicKey);
+    await _prefs!.remove(_keyAesKey);
     await _prefs!.remove(_keyIsRoomCreator);
-    await _prefs!.remove(_keyRoomCreatedTimestamp);
-    await _prefs!.remove(_keyFailedAttempts);
-    await _prefs!.remove(_keyLockoutUntil);
-    _encryptionKey = null;
+
+    _privateKey = null;
+    _publicKey = null;
+    _aesKey = null;
   }
+
+  // Getters
+  String? get passwordHash => _prefs?.getString(_keyPasswordHash);
+  bool get hasPassword => passwordHash != null && passwordHash!.isNotEmpty;
+  bool get hasKeyPair => _privateKey != null && _publicKey != null;
+  bool get hasAesKey => _aesKey != null;
+  bool get isAuthenticated => hasPassword && hasKeyPair && hasAesKey;
+  bool get isRoomCreator => _prefs?.getBool(_keyIsRoomCreator) ?? false;
+
+  String? get publicKeyPem =>
+      _publicKey != null ? _encodePublicKeyToPem(_publicKey!) : null;
+  RSAPublicKey? get publicKey => _publicKey;
+
+  /// Get AES key as base64 string for network transmission
+  String? get aesKeyBase64 => _aesKey != null ? base64Encode(_aesKey!) : null;
 }

@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:asn1lib/asn1lib.dart' as asn1;
+import 'package:pointycastle/pointycastle.dart' as pc;
 import '../../settings/providers/settings_provider.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../../notifications/data/services/notification_service.dart';
+import '../../security/data/services/security_service.dart';
 import '../domain/entities/message.dart';
 import '../data/repositories/message_repository.dart';
 import '../data/services/tcp_server_service.dart';
@@ -51,6 +55,7 @@ class MessageNotifier extends Notifier<MessageState> {
     _tcpServer.errorStream.listen(_handleError);
     _tcpServer.syncRequestStream.listen(_handleSyncRequest);
     _tcpServer.nameChangeStream.listen(_handleNameChange);
+    _tcpServer.authRequestStream.listen(_handleAuthRequest);
 
     // Listen to peer discoveries for auto-sync
     _peerSubscription = ref.listen(discoveryProvider, (previous, next) {
@@ -191,16 +196,22 @@ class MessageNotifier extends Notifier<MessageState> {
         );
       }
 
-      await _tcpServer.sendSyncRequest(
+      final sent = await _tcpServer.sendSyncRequest(
         peerAddress,
         peerPort,
         deviceId,
         0, // Request all messages
       );
 
-      print('✅ Sync request sent to $peerAddress:$peerPort');
+      if (sent) {
+        print('✅ Sync request sent to $peerAddress:$peerPort');
+      } else {
+        print(
+          '⚠️ Sync request to $peerAddress:$peerPort deferred (peer still starting)',
+        );
+      }
     } catch (e) {
-      print('❌ Failed to request sync: $e');
+      print('⚠️ Failed to request sync: $e');
     }
   }
 
@@ -307,6 +318,137 @@ class MessageNotifier extends Notifier<MessageState> {
     } catch (e) {
       print('❌ Failed to broadcast name change: $e');
     }
+  }
+
+  /// Handle authentication request from a new peer
+  Future<void> _handleAuthRequest(Map<String, dynamic> request) async {
+    try {
+      print('🔐 Received auth request');
+
+      final peerAddress = request['peer_address'] as String;
+      final peerPort = request['peer_port'] as int;
+      final encryptedPasswordHash =
+          request['encrypted_password_hash'] as String;
+      final peerPublicKey = request['public_key'] as String;
+
+      print('   From: $peerAddress:$peerPort');
+
+      final securityService = SecurityService.instance;
+
+      // Decrypt the password hash with our private key
+      String decryptedPasswordHash;
+      try {
+        decryptedPasswordHash = securityService.decryptWithPrivateKey(
+          encryptedPasswordHash,
+        );
+        print('🔓 Decrypted password hash');
+      } catch (e) {
+        print('❌ Failed to decrypt password hash: $e');
+        await _tcpServer.sendAuthResponse(
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          success: false,
+          message: 'Failed to decrypt password hash',
+        );
+        return;
+      }
+
+      // Compare with our stored password hash
+      final storedPasswordHash = securityService.passwordHash;
+      if (storedPasswordHash == null) {
+        print('❌ No stored password hash found');
+        await _tcpServer.sendAuthResponse(
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          success: false,
+          message: 'Authentication not configured',
+        );
+        return;
+      }
+
+      if (decryptedPasswordHash != storedPasswordHash) {
+        print('❌ Password hash mismatch');
+        await _tcpServer.sendAuthResponse(
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          success: false,
+          message: 'Invalid password',
+        );
+        return;
+      }
+
+      print(
+        '✅ Password verified! Encrypting AES key with peer\'s public key...',
+      );
+
+      // Get our AES key
+      final aesKeyBase64 = securityService.aesKeyBase64;
+
+      if (aesKeyBase64 == null) {
+        print('❌ No AES key found');
+        await _tcpServer.sendAuthResponse(
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          success: false,
+          message: 'Encryption key not available',
+        );
+        return;
+      }
+
+      // Parse peer's public key and encrypt AES key
+      String encryptedAesKey;
+      try {
+        encryptedAesKey = await _encryptWithPeerPublicKey(
+          aesKeyBase64,
+          peerPublicKey,
+        );
+        print('🔐 AES key encrypted with peer\'s public key');
+      } catch (e) {
+        print('❌ Failed to encrypt AES key: $e');
+        await _tcpServer.sendAuthResponse(
+          peerAddress: peerAddress,
+          peerPort: peerPort,
+          success: false,
+          message: 'Failed to encrypt key',
+        );
+        return;
+      }
+
+      // Send success response with encrypted AES key
+      await _tcpServer.sendAuthResponse(
+        peerAddress: peerAddress,
+        peerPort: peerPort,
+        success: true,
+        encryptedAesKey: encryptedAesKey,
+        message: 'Authentication successful',
+      );
+
+      print('✅ Auth response sent successfully');
+    } catch (e) {
+      print('❌ Failed to handle auth request: $e');
+    }
+  }
+
+  /// Encrypt data with peer's RSA public key
+  Future<String> _encryptWithPeerPublicKey(
+    String plaintext,
+    String peerPublicKeyPem,
+  ) async {
+    final securityService = SecurityService.instance;
+
+    // Parse the PEM public key
+    final base64String = peerPublicKeyPem.replaceAll('PUBLIC:', '');
+    final bytes = base64Decode(base64String);
+    final asn1Parser = asn1.ASN1Parser(bytes);
+    final seq = asn1Parser.nextObject() as asn1.ASN1Sequence;
+
+    final peerPublicKey = pc.RSAPublicKey(
+      (seq.elements[0] as asn1.ASN1Integer).valueAsBigInteger, // modulus
+      (seq.elements[1] as asn1.ASN1Integer).valueAsBigInteger, // exponent
+    );
+
+    // Encrypt with peer's public key
+    return securityService.encryptWithPublicKey(plaintext, peerPublicKey);
   }
 
   /// Send a message to all peers
