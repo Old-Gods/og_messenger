@@ -58,24 +58,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Name updated successfully'),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-            ),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update name: $e'),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-            ),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
       }
@@ -130,10 +122,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Retention updated to $newDays days'),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-            ),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
       }
@@ -165,15 +154,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true) {
       await ref.read(messageProvider.notifier).clearAllMessages();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('All messages cleared'),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              onPressed: () {},
-            ),
+            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
       }
@@ -314,15 +298,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
-            ),
-          ),
-          const Divider(),
-
-          // Security
-          const ListTile(
-            title: Text(
-              'Security',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
           ),
           const Divider(),
