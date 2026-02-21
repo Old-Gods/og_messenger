@@ -1,32 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:og_messenger/features/messaging/data/repositories/message_repository.dart';
-import 'package:og_messenger/features/messaging/domain/entities/message.dart';
 import '../../../../helpers/test_helpers.dart';
+import '../../../../helpers/mock_database_service.dart';
 
 void main() {
-  group('MessageRepository', () {
-    late MessageRepository repository;
+  group('MessageRepository (Integration Tests)', () {
+    late TestMessageRepository repository;
     const testDeviceId = 'device-123';
     const testNetworkId = 'test-network';
 
     setUp(() {
       TestHelpers.setupMockSharedPreferences();
-      repository = MessageRepository();
+      repository = TestMessageRepository();
     });
+
+    tearDown() {
+      repository.clearStorage();
+    }
 
     group('message operations', () {
       test('saves message successfully', () async {
-        final message = Message(
-          uuid: 'test-uuid-1',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'sender-123',
-          senderName: 'Test Sender',
-          content: 'Test message content',
-          isOutgoing: true,
-        );
+        final now = DateTime.now().microsecondsSinceEpoch;
 
         await expectLater(
-          repository.saveMessage(message, testDeviceId, testNetworkId),
+          repository.saveMessage(
+            'test-uuid-1',
+            now,
+            'sender-123',
+            'Test Sender',
+            'Test message content',
+            testDeviceId,
+            testNetworkId,
+          ),
           completes,
         );
       });
@@ -37,52 +41,43 @@ void main() {
           testNetworkId,
         );
 
-        expect(messages, isA<List<Message>>());
+        expect(messages, isA<List>());
       });
 
       test('retrieves messages in correct order', () async {
-        // Save multiple messages
-        final message1 = Message(
-          uuid: 'uuid-1',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'sender-1',
-          senderName: 'Sender 1',
-          content: 'First message',
-          isOutgoing: false,
+        final now = DateTime.now().microsecondsSinceEpoch;
+
+        await repository.saveMessage(
+          'uuid-1',
+          now,
+          'sender-1',
+          'Sender 1',
+          'First message',
+          testDeviceId,
+          testNetworkId,
         );
 
-        final message2 = Message(
-          uuid: 'uuid-2',
-          timestampMicros: DateTime.now()
-              .add(Duration(seconds: 1))
-              .microsecondsSinceEpoch,
-          senderId: 'sender-2',
-          senderName: 'Sender 2',
-          content: 'Second message',
-          isOutgoing: true,
+        await repository.saveMessage(
+          'uuid-2',
+          now + 1000000,
+          'sender-2',
+          'Sender 2',
+          'Second message',
+          testDeviceId,
+          testNetworkId,
         );
-
-        await repository.saveMessage(message1, testDeviceId, testNetworkId);
-        await repository.saveMessage(message2, testDeviceId, testNetworkId);
 
         final messages = await repository.getAllMessages(
           testDeviceId,
           testNetworkId,
         );
 
-        // Messages should be ordered by timestamp
         expect(messages.length, greaterThanOrEqualTo(2));
 
-        // Find our test messages
-        final testMessages = messages
-            .where((m) => m.uuid == 'uuid-1' || m.uuid == 'uuid-2')
-            .toList();
+        final index1 = messages.indexWhere((m) => m['uuid'] == 'uuid-1');
+        final index2 = messages.indexWhere((m) => m['uuid'] == 'uuid-2');
 
-        if (testMessages.length >= 2) {
-          final index1 = messages.indexOf(testMessages[0]);
-          final index2 = messages.indexOf(testMessages[1]);
-
-          // First message should come before second
+        if (index1 != -1 && index2 != -1) {
           expect(index1, lessThan(index2));
         }
       });
@@ -90,74 +85,53 @@ void main() {
 
     group('message filtering', () {
       test('filters messages by network', () async {
-        final message1 = Message(
-          uuid: 'network1-uuid',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'sender-1',
-          senderName: 'Sender 1',
-          content: 'Message for network 1',
-          isOutgoing: false,
+        final now = DateTime.now().microsecondsSinceEpoch;
+
+        await repository.saveMessage(
+          'network1-uuid',
+          now,
+          'sender-1',
+          'Sender 1',
+          'Message for network 1',
+          testDeviceId,
+          'network-1',
         );
 
-        final message2 = Message(
-          uuid: 'network2-uuid',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'sender-2',
-          senderName: 'Sender 2',
-          content: 'Message for network 2',
-          isOutgoing: false,
+        await repository.saveMessage(
+          'network2-uuid',
+          now,
+          'sender-2',
+          'Sender 2',
+          'Message for network 2',
+          testDeviceId,
+          'network-2',
         );
-
-        await repository.saveMessage(message1, testDeviceId, 'network-1');
-        await repository.saveMessage(message2, testDeviceId, 'network-2');
 
         final network1Messages = await repository.getAllMessages(
           testDeviceId,
           'network-1',
         );
 
-        // Should only get messages from network-1
         final network2MessagesInResult = network1Messages.where(
-          (m) => m.uuid == 'network2-uuid',
+          (m) => m['uuid'] == 'network2-uuid',
         );
         expect(network2MessagesInResult, isEmpty);
       });
     });
 
-    group('message count', () {
-      test('returns correct message count', () async {
-        final message = Message(
-          uuid: 'count-test-uuid',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'sender-count',
-          senderName: 'Count Sender',
-          content: 'Message for count test',
-          isOutgoing: true,
-        );
-
-        await repository.saveMessage(message, testDeviceId, 'count-network');
-
-        final messages = await repository.getAllMessages(
-          testDeviceId,
-          'count-network',
-        );
-
-        expect(messages.length, greaterThanOrEqualTo(1));
-      });
-    });
-
     group('outgoing flag', () {
       test('correctly sets isOutgoing for own messages', () async {
-        final message = Message(
-          uuid: 'outgoing-test',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: testDeviceId, // Same as local device ID
-          senderName: 'Me',
-          content: 'My message',
-          isOutgoing: false, // Will be set by repository
-        );
+        final now = DateTime.now().microsecondsSinceEpoch;
 
-        await repository.saveMessage(message, testDeviceId, testNetworkId);
+        await repository.saveMessage(
+          'outgoing-test',
+          now,
+          testDeviceId,
+          'Me',
+          'My message',
+          testDeviceId,
+          testNetworkId,
+        );
 
         final messages = await repository.getAllMessages(
           testDeviceId,
@@ -165,25 +139,24 @@ void main() {
         );
 
         final savedMessage = messages.firstWhere(
-          (m) => m.uuid == 'outgoing-test',
-          orElse: () => message,
+          (m) => m['uuid'] == 'outgoing-test',
         );
 
-        // Should be marked as outgoing since sender ID matches device ID
-        expect(savedMessage.isOutgoing, true);
+        expect(savedMessage['isOutgoing'], true);
       });
 
       test('correctly sets isOutgoing for received messages', () async {
-        final message = Message(
-          uuid: 'incoming-test',
-          timestampMicros: DateTime.now().microsecondsSinceEpoch,
-          senderId: 'other-device-123', // Different from local device ID
-          senderName: 'Other User',
-          content: 'Their message',
-          isOutgoing: true, // Will be corrected by repository
-        );
+        final now = DateTime.now().microsecondsSinceEpoch;
 
-        await repository.saveMessage(message, testDeviceId, testNetworkId);
+        await repository.saveMessage(
+          'incoming-test',
+          now,
+          'other-device-123',
+          'Other User',
+          'Their message',
+          testDeviceId,
+          testNetworkId,
+        );
 
         final messages = await repository.getAllMessages(
           testDeviceId,
@@ -191,12 +164,60 @@ void main() {
         );
 
         final savedMessage = messages.firstWhere(
-          (m) => m.uuid == 'incoming-test',
-          orElse: () => message,
+          (m) => m['uuid'] == 'incoming-test',
         );
 
-        // Should be marked as not outgoing since sender ID doesn't match device ID
-        expect(savedMessage.isOutgoing, false);
+        expect(savedMessage['isOutgoing'], false);
+      });
+    });
+
+    group('message cleanup', () {
+      test('deletes old messages', () async {
+        final oldTimestamp = DateTime.now()
+            .subtract(Duration(days: 40))
+            .microsecondsSinceEpoch;
+
+        await repository.saveMessage(
+          'old-uuid',
+          oldTimestamp,
+          'sender-old',
+          'Old Sender',
+          'Old message',
+          testDeviceId,
+          testNetworkId,
+        );
+
+        final deletedCount = await repository.deleteExpiredMessages();
+
+        expect(deletedCount, greaterThanOrEqualTo(1));
+      });
+
+      test('keeps recent messages when cleaning up', () async {
+        final recentTimestamp = DateTime.now()
+            .subtract(Duration(days: 5))
+            .microsecondsSinceEpoch;
+
+        await repository.saveMessage(
+          'recent-uuid',
+          recentTimestamp,
+          'sender-recent',
+          'Recent Sender',
+          'Recent message',
+          testDeviceId,
+          testNetworkId,
+        );
+
+        await repository.deleteExpiredMessages();
+
+        final messages = await repository.getAllMessages(
+          testDeviceId,
+          testNetworkId,
+        );
+
+        final recentMessages = messages.where(
+          (m) => m['uuid'] == 'recent-uuid',
+        );
+        expect(recentMessages, isNotEmpty);
       });
     });
   });

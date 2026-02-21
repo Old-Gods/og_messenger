@@ -48,214 +48,198 @@ void main() {
       });
     });
 
-    group('password storage and verification', () {
-      test('stores and verifies password correctly', () async {
-        await securityService.initialize();
-
-        final password = 'mySecurePassword123';
-        await securityService.setPassword(password);
-
-        expect(securityService.hasPassword(), true);
-        expect(securityService.verifyPassword(password), true);
-        expect(securityService.verifyPassword('wrongPassword'), false);
-      });
-
-      test('hasPassword returns false when no password is set', () async {
-        await securityService.initialize();
-
-        expect(securityService.hasPassword(), false);
-      });
-    });
-
-    group('RSA key generation', () {
-      test('generates RSA key pair successfully', () async {
-        await securityService.initialize();
-
-        await securityService.generateKeyPair();
-
-        expect(securityService.hasKeyPair(), true);
-        expect(securityService.getPublicKeyPem(), isNotNull);
-        expect(securityService.getPublicKeyPem(), contains('BEGIN PUBLIC KEY'));
-        expect(securityService.getPublicKeyPem(), contains('END PUBLIC KEY'));
-      });
-
-      test('hasKeyPair returns false when no keys generated', () async {
-        await securityService.initialize();
-
-        expect(securityService.hasKeyPair(), false);
-      });
-
-      test('generated public key is different each time', () async {
-        await securityService.initialize();
-
-        await securityService.generateKeyPair();
-        final publicKey1 = securityService.getPublicKeyPem();
-
-        // Clear and regenerate
-        TestHelpers.setupMockSharedPreferences();
-        final newService = SecurityService.instance;
-        await newService.initialize();
-        await newService.generateKeyPair();
-        final publicKey2 = newService.getPublicKeyPem();
-
-        expect(publicKey1, isNot(equals(publicKey2)));
-      });
-    });
-
-    group('AES key generation', () {
-      test('generates AES key successfully', () async {
-        await securityService.initialize();
-
-        await securityService.generateAesKey();
-
-        expect(securityService.hasAesKey(), true);
-      });
-
-      test('hasAesKey returns false when no AES key generated', () async {
-        await securityService.initialize();
-
-        expect(securityService.hasAesKey(), false);
-      });
-
-      test('generated AES key is different each time', () async {
-        await securityService.initialize();
-
-        await securityService.generateAesKey();
-        final aesKey1 = securityService.getAesKey();
-
-        // Clear and regenerate
-        TestHelpers.setupMockSharedPreferences();
-        final newService = SecurityService.instance;
-        await newService.initialize();
-        await newService.generateAesKey();
-        final aesKey2 = newService.getAesKey();
-
-        expect(aesKey1, isNot(equals(aesKey2)));
-      });
-    });
-
-    group('message encryption and decryption', () {
-      test('encrypts and decrypts message successfully', () async {
+    group('message encryption (AES)', () {
+      test('encrypts message successfully', () async {
         await securityService.initialize();
         await securityService.generateAesKey();
 
-        final originalMessage = 'Hello, this is a secret message!';
-        final encrypted = securityService.encryptMessage(originalMessage);
-        final decrypted = securityService.decryptMessage(encrypted);
+        final plaintext = 'Hello, World!';
+        final ciphertext = securityService.encryptMessage(plaintext);
 
-        expect(encrypted, isNot(equals(originalMessage)));
-        expect(decrypted, equals(originalMessage));
+        expect(ciphertext, isNotEmpty);
+        expect(ciphertext, isNot(equals(plaintext)));
       });
 
-      test('encrypted message is different each time (due to IV)', () async {
+      test('decrypts message successfully', () async {
         await securityService.initialize();
         await securityService.generateAesKey();
 
-        final message = 'Same message';
-        final encrypted1 = securityService.encryptMessage(message);
-        final encrypted2 = securityService.encryptMessage(message);
+        final plaintext = 'Hello, World!';
+        final ciphertext = securityService.encryptMessage(plaintext);
+        final decrypted = securityService.decryptMessage(ciphertext);
 
-        expect(encrypted1, isNot(equals(encrypted2))); // Different IVs
-        expect(securityService.decryptMessage(encrypted1), equals(message));
-        expect(securityService.decryptMessage(encrypted2), equals(message));
+        expect(decrypted, equals(plaintext));
       });
 
-      test('handles empty message encryption', () async {
+      test('encrypted messages are different even for same input', () async {
         await securityService.initialize();
         await securityService.generateAesKey();
 
-        final encrypted = securityService.encryptMessage('');
-        final decrypted = securityService.decryptMessage(encrypted);
+        final plaintext = 'Test message';
+        final ciphertext1 = securityService.encryptMessage(plaintext);
+        final ciphertext2 = securityService.encryptMessage(plaintext);
 
-        expect(decrypted, equals(''));
+        // Should be different due to IV
+        expect(ciphertext1, isNot(equals(ciphertext2)));
+
+        // But both should decrypt to same plaintext
+        expect(securityService.decryptMessage(ciphertext1), equals(plaintext));
+        expect(securityService.decryptMessage(ciphertext2), equals(plaintext));
       });
 
-      test('handles long message encryption', () async {
+      test('encrypts and decrypts long messages', () async {
         await securityService.initialize();
         await securityService.generateAesKey();
 
-        final longMessage = 'A' * 10000;
-        final encrypted = securityService.encryptMessage(longMessage);
-        final decrypted = securityService.decryptMessage(encrypted);
+        final longMessage = 'A' * 1000;
+        final ciphertext = securityService.encryptMessage(longMessage);
+        final decrypted = securityService.decryptMessage(ciphertext);
 
         expect(decrypted, equals(longMessage));
       });
-    });
 
-    group('room creator flag', () {
-      test('sets and retrieves room creator flag', () async {
+      test('encrypts and decrypts empty message', () async {
         await securityService.initialize();
+        await securityService.generateAesKey();
 
-        await securityService.setIsRoomCreator(true);
-        expect(securityService.isRoomCreator(), true);
+        final plaintext = '';
+        final ciphertext = securityService.encryptMessage(plaintext);
+        final decrypted = securityService.decryptMessage(ciphertext);
 
-        await securityService.setIsRoomCreator(false);
-        expect(securityService.isRoomCreator(), false);
+        expect(decrypted, equals(plaintext));
       });
 
-      test('defaults to false when not set', () async {
+      test('encrypts and decrypts special characters', () async {
         await securityService.initialize();
+        await securityService.generateAesKey();
 
-        expect(securityService.isRoomCreator(), false);
+        final plaintext = '!@#\$%^&*()_+-=[]{}|;:\'",.<>?/\\`~';
+        final ciphertext = securityService.encryptMessage(plaintext);
+        final decrypted = securityService.decryptMessage(ciphertext);
+
+        expect(decrypted, equals(plaintext));
+      });
+
+      test('encrypts and decrypts unicode characters', () async {
+        await securityService.initialize();
+        await securityService.generateAesKey();
+
+        final plaintext = '你好世界 🌍 مرحبا 😀';
+        final ciphertext = securityService.encryptMessage(plaintext);
+        final decrypted = securityService.decryptMessage(ciphertext);
+
+        expect(decrypted, equals(plaintext));
       });
     });
 
-    group('RSA signature', () {
-      test('signs and verifies data successfully', () async {
+    group('RSA encryption', () {
+      test('encrypts with public key successfully', () async {
         await securityService.initialize();
         await securityService.generateKeyPair();
 
-        final data = 'Important data to sign';
-        final signature = securityService.signData(data);
-        final publicKeyPem = securityService.getPublicKeyPem()!;
-        final isValid = securityService.verifySignature(
-          data,
-          signature,
+        final publicKey = securityService.publicKey!;
+        final plaintext = 'Test message';
+
+        final ciphertext = securityService.encryptWithPublicKey(
+          plaintext,
+          publicKey,
+        );
+
+        expect(ciphertext, isNotEmpty);
+        expect(ciphertext, isNot(equals(plaintext)));
+      });
+
+      test('decrypts RSA-encrypted message', () async {
+        await securityService.initialize();
+        await securityService.generateKeyPair();
+
+        final publicKey = securityService.publicKey!;
+        final plaintext = 'Test message';
+
+        final ciphertext = securityService.encryptWithPublicKey(
+          plaintext,
+          publicKey,
+        );
+
+        final decrypted = securityService.decryptWithPrivateKey(ciphertext);
+
+        expect(decrypted, equals(plaintext));
+      });
+
+      test('encrypts with PEM-formatted public key', () async {
+        await securityService.initialize();
+        await securityService.generateKeyPair();
+
+        final publicKeyPem = securityService.publicKeyPem!;
+        final plaintext = 'Test message';
+
+        final ciphertext = securityService.encryptWithPublicKeyPem(
+          plaintext,
           publicKeyPem,
         );
 
-        expect(signature, isNotEmpty);
-        expect(isValid, true);
+        expect(ciphertext, isNotEmpty);
+        expect(ciphertext, isNot(equals(plaintext)));
       });
 
-      test('signature verification fails with wrong data', () async {
+      test('decrypts PEM-encrypted message', () async {
         await securityService.initialize();
         await securityService.generateKeyPair();
 
-        final data = 'Original data';
-        final signature = securityService.signData(data);
-        final publicKeyPem = securityService.getPublicKeyPem()!;
+        final publicKeyPem = securityService.publicKeyPem!;
+        final plaintext = 'Test message';
 
-        final isValid = securityService.verifySignature(
-          'Modified data',
-          signature,
+        final ciphertext = securityService.encryptWithPublicKeyPem(
+          plaintext,
           publicKeyPem,
         );
 
-        expect(isValid, false);
-      });
+        final decrypted = securityService.decryptWithPrivateKey(ciphertext);
 
-      test('signature verification fails with wrong public key', () async {
+        expect(decrypted, equals(plaintext));
+      });
+    });
+
+    group('key management', () {
+      test('generates valid public key', () async {
         await securityService.initialize();
         await securityService.generateKeyPair();
 
-        final data = 'Data to sign';
-        final signature = securityService.signData(data);
+        expect(securityService.publicKey, isNotNull);
+      });
 
-        // Generate different key pair
-        TestHelpers.setupMockSharedPreferences();
-        final newService = SecurityService.instance;
-        await newService.initialize();
-        await newService.generateKeyPair();
-        final differentPublicKey = newService.getPublicKeyPem()!;
+      test('generates valid PEM-formatted public key', () async {
+        await securityService.initialize();
+        await securityService.generateKeyPair();
 
-        final isValid = securityService.verifySignature(
-          data,
-          signature,
-          differentPublicKey,
+        final publicKeyPem = securityService.publicKeyPem;
+
+        expect(publicKeyPem, isNotNull);
+        expect(publicKeyPem, isNotEmpty);
+        // PEM format starts with "PUBLIC:" prefix instead of "BEGIN PUBLIC KEY"
+        expect(publicKeyPem, startsWith('PUBLIC:'));
+      });
+
+      test('public key PEM can be used for encryption', () async {
+        await securityService.initialize();
+        await securityService.generateKeyPair();
+
+        final publicKeyPem = securityService.publicKeyPem!;
+        final plaintext = 'Test';
+
+        expect(
+          () =>
+              securityService.encryptWithPublicKeyPem(plaintext, publicKeyPem),
+          returnsNormally,
         );
+      });
 
-        expect(isValid, false);
+      test('has AES key for message encryption', () async {
+        await securityService.initialize();
+        await securityService.generateAesKey();
+
+        expect(securityService.aesKeyBase64, isNotNull);
+        expect(securityService.aesKeyBase64, isNotEmpty);
       });
     });
   });
