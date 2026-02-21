@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
+import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
 class UdpDiscoveryService {
@@ -194,12 +195,15 @@ class UdpDiscoveryService {
     }
 
     try {
+      final securityService = SecurityService.instance;
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
+        publicKey: securityService.publicKeyPem,
+        isAuthenticated: securityService.isAuthenticated,
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
@@ -247,6 +251,8 @@ class UdpDiscoveryService {
         ipAddress: datagram.address.address,
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
+        publicKey: peer.publicKey,
+        isAuthenticated: peer.isAuthenticated,
       );
 
       // Add or update peer
