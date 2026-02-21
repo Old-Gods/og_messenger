@@ -31,7 +31,6 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          skip-github-release: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
   release-build:
