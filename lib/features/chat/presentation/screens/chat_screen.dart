@@ -389,6 +389,10 @@ class _MessageBubble extends ConsumerWidget {
     // Get theme brightness
     final brightness = Theme.of(context).brightness;
 
+    // Watch discovery state to check peer connection status
+    final discoveryState = ref.watch(discoveryProvider);
+    final isConnected = discoveryState.peers.containsKey(message.senderId);
+
     // Watch the color assignments map
     final colorAssignments = ref.watch(colorAssignmentProvider);
 
@@ -441,13 +445,38 @@ class _MessageBubble extends ConsumerWidget {
             if (!isOwn)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  message.senderName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                    fontSize: 12,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Darker outline circle
+                        Icon(
+                          Icons.circle,
+                          size: 12,
+                          color: isConnected
+                              ? Colors.green.shade800
+                              : Colors.grey.shade700,
+                        ),
+                        // Main filled circle
+                        Icon(
+                          Icons.circle,
+                          size: 10,
+                          color: isConnected ? Colors.green : Colors.grey,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      message.senderName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             SelectableText(
