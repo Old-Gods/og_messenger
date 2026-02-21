@@ -52,22 +52,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       }
     });
 
-    // Check if already authenticated and skip to chat
-    _checkExistingAuth();
+    // Always clear authentication data on startup to force re-authentication
+    _clearAuthOnStartup();
   }
 
-  Future<void> _checkExistingAuth() async {
+  Future<void> _clearAuthOnStartup() async {
     final securityService = SecurityService.instance;
     if (securityService.isAuthenticated) {
-      print('🔐 Already authenticated, skipping to chat');
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(
-            context,
-            rootNavigator: true,
-          ).pushReplacementNamed('/chat');
-        }
-      });
+      print(
+        '🔄 Clearing authentication data - devices must re-authenticate on each connection',
+      );
+      await securityService.clearSecurityData();
     }
   }
 
