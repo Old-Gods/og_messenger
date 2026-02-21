@@ -165,8 +165,3 @@ Peer → Verify Password → Encrypt AES Key → TcpServerService → Setup → 
 - ✅ Dependency injection via Riverpod
 - ✅ Type-safe entities and models
 - ✅ Comprehensive error handling
-
-## Version
-
-**Current**: 1.0.0 (Initial Implementation)  
-**Date**: February 19, 2026

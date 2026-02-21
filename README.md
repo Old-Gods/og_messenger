@@ -78,8 +78,3 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues and solution
 ## License
 
 Private project - not for public distribution.
-
-## Version
-
-1.0.0+1
-
