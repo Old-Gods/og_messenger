@@ -1,0 +1,53 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Test helper utilities
+class TestHelpers {
+  /// Setup mock SharedPreferences for testing
+  static void setupMockSharedPreferences([Map<String, Object>? values]) {
+    SharedPreferences.setMockInitialValues(values ?? {});
+  }
+
+  /// Generate a test RSA public key in PEM format
+  static String getTestPublicKey() {
+    return '''-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Z9h5VBwBBvnNBNKVt9C
+VL7+cqQN9+RqR7uo5l5DXV3rLPWYqVZ1xZnqxrF6pXHYCjU0E7VQgCmXCIBzNGKH
+m9p3HaEcPvNJCMsQYVsE4bG0a9nRYCCnE8IW0eUPxDvNXqKQKLLCqOYX7TvKvKv6
+wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLLCqOYX7Tv
+KvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLLCqO
+YX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqL
+LQIDAQAB
+-----END PUBLIC KEY-----''';
+  }
+
+  /// Generate a test RSA private key in PEM format
+  static String getTestPrivateKey() {
+    return '''-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEA0Z9h5VBwBBvnNBNKVt9CVL7+cqQN9+RqR7uo5l5DXV3rLPWY
+qVZ1xZnqxrF6pXHYCjU0E7VQgCmXCIBzNGKHm9p3HaEcPvNJCMsQYVsE4bG0a9nR
+YCCnE8IW0eUPxDvNXqKQKLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP
+2VBhXZHVOCPnBpKnYBvNqQVXqLLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY
+5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVn
+VfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLQIDAQABAoIBADmE8KzxHBnXqCgh
+vxRvYGYFEzXhgLKQN5EqQvLLvqQN9+RqR7uo5l5DXV3rLPWYqVZ1xZnqxrF6pXHY
+CjU0E7VQgCmXCIBzNGKHm9p3HaEcPvNJCMsQYVsE4bG0a9nRYCCnE8IW0eUPxDvN
+XqKQKLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKn
+YBvNqQVXqLLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCP
+nBpKnYBvNqQVXqLLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZ
+HVOCPnECgYEA8R7gN9YLVBwBBvnNBNKVt9CVL7+cqQN9+RqR7uo5l5DXV3rLPWYq
+VZ1xZnqxrF6pXHYCjU0E7VQgCmXCIBzNGKHm9p3HaEcPvNJCMsQYVsE4bG0a9nRY
+CCnE8IW0eUPxDvNXqKQKLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5kFjP2
+VBhXZHVOCPnBpKnYBvNqQVXqLLLCqOYX7TvKvKv6wQZXqYP0h0uLZvYrVnVfvWY5
+kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLQKBgQDUwE7VQgCmXCIBzNGKHm9p3HaEc
+PvNJCMsQYVsE4bG0a9nRYCCnE8IW0eUPxDvNXqKQKLLCqOYX7TvKvKv6wQZXqYP0
+h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLLCqOYX7TvKvKv6wQ
+ZXqYP0h0uLZvYrVnVfvWY5kFjP2VBhXZHVOCPnBpKnYBvNqQVXqLLQKBgH0ZLLY
+-----END RSA PRIVATE KEY-----''';
+  }
+
+  /// Create a test AES key (base64 encoded)
+  static String getTestAesKeyBase64() {
+    return 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY='; // 32 bytes when decoded
+  }
+}

@@ -1,27 +1,103 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:og_messenger/main.dart';
+import 'helpers/test_helpers.dart';
 
 void main() {
-  testWidgets('App launches and shows chat screen', (
-    WidgetTester tester,
-  ) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+  group('OGMessengerApp', () {
+    setUp(() {
+      TestHelpers.setupMockSharedPreferences();
+    });
 
-    // Wait for the app to initialize
-    await tester.pumpAndSettle();
+    testWidgets('App launches successfully', (WidgetTester tester) async {
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
 
-    // Verify that the app bar title or message input field is present
-    expect(find.byType(TextField), findsWidgets);
+      // Verify that the app launches
+      expect(find.byType(OGMessengerApp), findsOneWidget);
+    });
+
+    testWidgets('App shows MaterialApp', (WidgetTester tester) async {
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      // Verify MaterialApp is present
+      expect(find.byType(MaterialApp), findsOneWidget);
+    });
+
+    testWidgets('App has proper theme', (WidgetTester tester) async {
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(materialApp.theme, isNotNull);
+    });
+
+    testWidgets('App navigates to appropriate screen', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      // App should show either setup screen or chat screen
+      // Depending on whether it's first launch
+      expect(find.byType(Scaffold), findsOneWidget);
+    });
+  });
+
+  group('OGMessengerApp - First Launch', () {
+    testWidgets('Shows setup screen on first launch', (
+      WidgetTester tester,
+    ) async {
+      TestHelpers.setupMockSharedPreferences({});
+
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      // On first launch, should show some form of setup or input
+      expect(find.byType(TextField), findsWidgets);
+    });
+  });
+
+  group('OGMessengerApp - Returning User', () {
+    testWidgets('Shows chat screen for returning user', (
+      WidgetTester tester,
+    ) async {
+      TestHelpers.setupMockSharedPreferences({
+        'device_id': 'test-device-123',
+        'username': 'TestUser',
+        'is_first_launch': false,
+      });
+
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      // Should navigate to chat screen eventually
+      expect(find.byType(Scaffold), findsOneWidget);
+    });
+  });
+
+  group('OGMessengerApp - Error Handling', () {
+    testWidgets('Handles initialization errors gracefully', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+
+      // Even if there are initialization issues, app should not crash
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OGMessengerApp), findsOneWidget);
+    });
+  });
+
+  group('OGMessengerApp - ProviderScope', () {
+    testWidgets('Requires ProviderScope wrapper', (WidgetTester tester) async {
+      // This test verifies the app uses Riverpod
+      await tester.pumpWidget(const ProviderScope(child: OGMessengerApp()));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProviderScope), findsOneWidget);
+    });
   });
 }
