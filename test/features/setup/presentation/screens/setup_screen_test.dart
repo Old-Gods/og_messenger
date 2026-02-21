@@ -12,11 +12,7 @@ void main() {
 
     testWidgets('renders without crashing', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -26,11 +22,7 @@ void main() {
 
     testWidgets('has username input field', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -40,11 +32,7 @@ void main() {
 
     testWidgets('has continue or submit button', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -52,20 +40,19 @@ void main() {
       // Look for button with continue or similar text
       final elevatedButtonFinder = find.byType(ElevatedButton);
       final textButtonFinder = find.byType(TextButton);
-      
+
       expect(
-        elevatedButtonFinder.evaluate().isNotEmpty || textButtonFinder.evaluate().isNotEmpty,
+        elevatedButtonFinder.evaluate().isNotEmpty ||
+            textButtonFinder.evaluate().isNotEmpty,
         true,
       );
     });
 
-    testWidgets('username field accepts text input', (WidgetTester tester) async {
+    testWidgets('username field accepts text input', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -78,13 +65,11 @@ void main() {
       expect(find.text('TestUser'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for empty username', (WidgetTester tester) async {
+    testWidgets('shows validation error for empty username', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -92,10 +77,10 @@ void main() {
       // Try to submit without entering username
       final elevatedButtonFinder = find.byType(ElevatedButton);
       final textButtonFinder = find.byType(TextButton);
-      final buttonFinder = elevatedButtonFinder.evaluate().isNotEmpty 
-          ? elevatedButtonFinder.first 
+      final buttonFinder = elevatedButtonFinder.evaluate().isNotEmpty
+          ? elevatedButtonFinder.first
           : textButtonFinder.first;
-      
+
       if (buttonFinder.evaluate().isNotEmpty) {
         await tester.tap(buttonFinder);
         await tester.pumpAndSettle();
@@ -105,39 +90,36 @@ void main() {
       }
     });
 
-    testWidgets('displays app branding or welcome message', (WidgetTester tester) async {
+    testWidgets('displays app branding or welcome message', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
-final ogMessengerFinder = find.textContaining('OG Messenger');
-      final welcomeFinder = find.textContaining('Welcome');
-      
-      expect(
-        ogMessengerFinder.evaluate().isNotEmpty || welcomeFinder.evaluate().isNotEmpty,
-        true
+
+      await tester.pumpAndSettle();
+
       // Look for app name or welcome text
+      final ogMessengerFinder = find.textContaining('OG Messenger');
+      final welcomeFinder = find.textContaining('Welcome');
+
       expect(
-        find.textContaining('OG Messenger').or(find.textContaining('Welcome')),
-        findsWidgets,
+        ogMessengerFinder.evaluate().isNotEmpty ||
+            welcomeFinder.evaluate().isNotEmpty,
+        true,
       );
     });
   });
 
   group('SetupScreen - Layout', () {
-    testWidgets('maintains structure on different screen sizes', (WidgetTester tester) async {
+    testWidgets('maintains structure on different screen sizes', (
+      WidgetTester tester,
+    ) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
 
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -152,13 +134,11 @@ final ogMessengerFinder = find.textContaining('OG Messenger');
   });
 
   group('SetupScreen - Accessibility', () {
-    testWidgets('username field has proper semantics', (WidgetTester tester) async {
+    testWidgets('username field has proper semantics', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
       await tester.pumpAndSettle();
@@ -172,22 +152,19 @@ final ogMessengerFinder = find.textContaining('OG Messenger');
 
     testWidgets('submit button is accessible', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: SetupScreen(),
-          ),
-        ),
-      );
-elevatedButtonFinder = find.byType(ElevatedButton);
-      final textButtonFinder = find.byType(TextButton);
-      
-      expect(
-        elevatedButtonFinder.evaluate().isNotEmpty || textButtonFinder.evaluate().isNotEmpty,
-        true,
+        const ProviderScope(child: MaterialApp(home: SetupScreen())),
       );
 
-      final button = find.byType(ElevatedButton).or(find.byType(TextButton));
-      expect(button, findsWidgets);
+      await tester.pumpAndSettle();
+
+      final elevatedButtonFinder = find.byType(ElevatedButton);
+      final textButtonFinder = find.byType(TextButton);
+
+      expect(
+        elevatedButtonFinder.evaluate().isNotEmpty ||
+            textButtonFinder.evaluate().isNotEmpty,
+        true,
+      );
     });
   });
 }
