@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/network_constants.dart';
@@ -22,6 +23,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _isInitialized = false;
   bool _isInitializing = false;
   int _previousMessageCount = 0;
+  DateTime? _lastTypingIndicatorSent;
+  Timer? _typingThrottleTimer;
 
   @override
   void initState() {
@@ -36,6 +39,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     _messageFocusNode.dispose();
+    _typingThrottleTimer?.cancel();
     super.dispose();
   }
 
@@ -173,6 +177,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     _messageController.clear();
+
+    // Reset typing indicator throttle when sending message
+    _lastTypingIndicatorSent = null;
+    _typingThrottleTimer?.cancel();
+
     await ref.read(messageProvider.notifier).sendMessage(content);
 
     // Scroll to bottom after sending
@@ -180,6 +189,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     // Re-focus the text field so user can immediately type again
     _messageFocusNode.requestFocus();
+  }
+
+  void _onTextChanged(String text) {
+    // Only send typing indicators if there's text and we have peers
+    if (text.isEmpty) return;
+
+    final now = DateTime.now();
+    final shouldSend =
+        _lastTypingIndicatorSent == null ||
+        now.difference(_lastTypingIndicatorSent!) >=
+            NetworkConstants.typingThrottleInterval;
+
+    if (shouldSend) {
+      _lastTypingIndicatorSent = now;
+      ref.read(messageProvider.notifier).sendTypingIndicator();
+    }
+  }
+
+  String _buildTypingIndicatorText() {
+    final typingPeers = ref.watch(messageProvider).typingPeers;
+    final discoveryState = ref.read(discoveryProvider);
+
+    if (typingPeers.isEmpty) return '';
+
+    // Get names of typing peers
+    final typingNames = <String>[];
+    for (final deviceId in typingPeers.keys) {
+      final peer = discoveryState.peers[deviceId];
+      if (peer != null) {
+        typingNames.add(peer.deviceName);
+      }
+    }
+
+    if (typingNames.isEmpty) return '';
+
+    // Format the text based on number of typers
+    if (typingNames.length == 1) {
+      return '${typingNames[0]} is typing';
+    } else if (typingNames.length == 2) {
+      return '${typingNames[0]} and ${typingNames[1]} are typing';
+    } else {
+      // Show first 2 names and count of others
+      final othersCount =
+          typingNames.length - NetworkConstants.typingDisplayLimit;
+      return '${typingNames[0]}, ${typingNames[1]} and $othersCount others are typing';
+    }
   }
 
   @override
@@ -330,6 +385,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
           ),
 
+          // Typing indicator
+          if (_buildTypingIndicatorText().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                _buildTypingIndicatorText(),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+
           // Message input
           Container(
             padding: const EdgeInsets.all(8),
@@ -359,6 +428,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                     maxLines: null,
                     textInputAction: TextInputAction.send,
+                    onChanged: _onTextChanged,
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),

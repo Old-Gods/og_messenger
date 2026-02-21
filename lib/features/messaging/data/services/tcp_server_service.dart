@@ -28,6 +28,8 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _authResponseController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _typingIndicatorController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -52,6 +54,10 @@ class TcpServerService {
   /// Stream of auth responses
   Stream<Map<String, dynamic>> get authResponseStream =>
       _authResponseController.stream;
+
+  /// Stream of typing indicators
+  Stream<Map<String, dynamic>> get typingIndicatorStream =>
+      _typingIndicatorController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -219,6 +225,15 @@ class TcpServerService {
         return;
       }
 
+      // Check if this is a typing indicator
+      if (json['type'] == 'typing_indicator') {
+        _typingIndicatorController.add({
+          'device_id': json['device_id'] as String,
+          'device_name': json['device_name'] as String,
+        });
+        return;
+      }
+
       // Otherwise, it's a regular message
       final parsedMessage = Message.fromJson(json);
 
@@ -376,6 +391,34 @@ class TcpServerService {
     } catch (e) {
       print('❌ Failed to send name change to $peerAddress:$peerPort: $e');
       _errorController.add('Failed to send name change: $e');
+      return false;
+    }
+  }
+
+  /// Send a typing indicator to a peer
+  Future<bool> sendTypingIndicator(
+    String peerAddress,
+    int peerPort,
+    String deviceId,
+    String deviceName,
+  ) async {
+    try {
+      final indicator = {
+        'type': 'typing_indicator',
+        'device_id': deviceId,
+        'device_name': deviceName,
+      };
+
+      final indicatorJson = jsonEncode(indicator);
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$indicatorJson\n');
+      await socket.flush();
+      await socket.close();
+
+      return true;
+    } catch (e) {
+      // Silently fail for typing indicators - they're not critical
       return false;
     }
   }

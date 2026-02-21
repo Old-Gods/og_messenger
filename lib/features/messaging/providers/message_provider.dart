@@ -17,22 +17,26 @@ class MessageState {
   final List<Message> messages;
   final bool isLoading;
   final String? error;
+  final Map<String, DateTime> typingPeers; // deviceId -> last typing time
 
   const MessageState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
+    this.typingPeers = const {},
   });
 
   MessageState copyWith({
     List<Message>? messages,
     bool? isLoading,
     String? error,
+    Map<String, DateTime>? typingPeers,
   }) {
     return MessageState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      typingPeers: typingPeers ?? this.typingPeers,
     );
   }
 }
@@ -44,6 +48,7 @@ class MessageNotifier extends Notifier<MessageState> {
   ProviderSubscription? _peerSubscription;
   final Set<String> _syncedPeers = {};
   bool _isAppInForeground = true;
+  Timer? _typingCleanupTimer;
 
   @override
   MessageState build() {
@@ -56,16 +61,59 @@ class MessageNotifier extends Notifier<MessageState> {
     _tcpServer.syncRequestStream.listen(_handleSyncRequest);
     _tcpServer.nameChangeStream.listen(_handleNameChange);
     _tcpServer.authRequestStream.listen(_handleAuthRequest);
+    _tcpServer.typingIndicatorStream.listen(_handleTypingIndicator);
 
     // Listen to peer discoveries for auto-sync
     _peerSubscription = ref.listen(discoveryProvider, (previous, next) {
       _handlePeerChanges(previous?.peers ?? {}, next.peers);
     });
 
+    // Start typing indicator cleanup timer
+    _startTypingCleanupTimer();
+
     // Schedule async load after build completes
     Future.microtask(() => loadMessages());
 
+    // Clean up timer when provider is disposed
+    ref.onDispose(() {
+      _typingCleanupTimer?.cancel();
+    });
+
     return const MessageState();
+  }
+
+  /// Start periodic cleanup of expired typing indicators
+  void _startTypingCleanupTimer() {
+    _typingCleanupTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _cleanupExpiredTypingIndicators();
+    });
+  }
+
+  /// Remove typing indicators that have expired
+  void _cleanupExpiredTypingIndicators() {
+    final now = DateTime.now();
+    final updated = Map<String, DateTime>.from(state.typingPeers);
+    var needsUpdate = false;
+
+    updated.removeWhere((deviceId, lastTyping) {
+      final isExpired =
+          now.difference(lastTyping) >
+          const Duration(seconds: 5); // Use NetworkConstants.typingTimeout
+      if (isExpired) needsUpdate = true;
+      return isExpired;
+    });
+
+    if (needsUpdate) {
+      state = state.copyWith(typingPeers: updated);
+    }
+  }
+
+  /// Handle typing indicator
+  void _handleTypingIndicator(Map<String, dynamic> data) {
+    final deviceId = data['device_id'] as String;
+    final updated = Map<String, DateTime>.from(state.typingPeers);
+    updated[deviceId] = DateTime.now();
+    state = state.copyWith(typingPeers: updated);
   }
 
   /// Update app foreground state
@@ -103,6 +151,12 @@ class MessageNotifier extends Notifier<MessageState> {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
       final networkId = settings.networkId;
+
+      // Clear typing indicator for this sender
+      final updated = Map<String, DateTime>.from(state.typingPeers);
+      if (updated.remove(message.senderId) != null) {
+        state = state.copyWith(typingPeers: updated);
+      }
 
       // Check for duplicates (same UUID and sender)
       final isDuplicate = state.messages.any(
@@ -520,6 +574,38 @@ class MessageNotifier extends Notifier<MessageState> {
     } catch (e) {
       print('❌ Error sending message: $e');
       state = state.copyWith(error: 'Failed to send message: $e');
+    }
+  }
+
+  /// Send typing indicator to all peers
+  Future<void> sendTypingIndicator() async {
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId;
+      final userName = settings.userName;
+
+      if (deviceId == null || userName == null) {
+        print(
+          '⚠️ Cannot send typing indicator: missing device ID or user name',
+        );
+        return;
+      }
+
+      // Send to all discovered peers
+      final discoveryState = ref.read(discoveryProvider);
+      final peers = discoveryState.peers.values;
+
+      for (final peer in peers) {
+        await _tcpServer.sendTypingIndicator(
+          peer.ipAddress,
+          peer.tcpPort,
+          deviceId,
+          userName,
+        );
+      }
+    } catch (e) {
+      // Silently fail for typing indicators - they're not critical
+      print('⚠️ Error sending typing indicator: $e');
     }
   }
 
