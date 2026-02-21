@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/network_constants.dart';
+import '../../../../core/utils/color_utils.dart';
 import '../../../messaging/providers/message_provider.dart';
+import '../../../messaging/providers/color_assignment_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
 
@@ -376,21 +378,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 }
 
 /// Message bubble widget
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends ConsumerWidget {
   final dynamic message;
   final bool isOwn;
 
   const _MessageBubble({required this.message, required this.isOwn});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Get theme brightness
+    final brightness = Theme.of(context).brightness;
+
+    // Watch the color assignments map
+    final colorAssignments = ref.watch(colorAssignmentProvider);
+
+    // Get background color
+    final Color backgroundColor;
+    if (isOwn) {
+      backgroundColor = Colors.blue[700]!;
+    } else {
+      // Check if color is already assigned
+      if (colorAssignments.containsKey(message.senderId)) {
+        final assignedColor = colorAssignments[message.senderId]!;
+        backgroundColor = ColorUtils.adjustColorForTheme(
+          assignedColor,
+          brightness,
+        );
+      } else {
+        // Assign color after build completes
+        Future(() {
+          ref
+              .read(colorAssignmentProvider.notifier)
+              .getColorForDeviceId(message.senderId);
+        });
+        // Use temporary color for this frame (will update next frame)
+        final tempColor = ColorUtils.materialPalette[0];
+        backgroundColor = ColorUtils.adjustColorForTheme(tempColor, brightness);
+      }
+    }
+
+    // Get contrasting text colors
+    final textColor = ColorUtils.getContrastingTextColor(backgroundColor);
+    final secondaryTextColor = ColorUtils.getSecondaryTextColor(
+      backgroundColor,
+    );
+
     return Align(
       alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
         decoration: BoxDecoration(
-          color: isOwn ? Colors.blue[700] : Colors.grey[300],
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(18),
         ),
         constraints: BoxConstraints(
@@ -406,25 +445,19 @@ class _MessageBubble extends StatelessWidget {
                   message.senderName,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: isOwn ? Colors.white70 : Colors.black87,
+                    color: textColor,
                     fontSize: 12,
                   ),
                 ),
               ),
             SelectableText(
               message.content,
-              style: TextStyle(
-                color: isOwn ? Colors.white : Colors.black87,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: textColor, fontSize: 16),
             ),
             const SizedBox(height: 4),
             Text(
               _formatTimestamp(message.timestamp),
-              style: TextStyle(
-                color: isOwn ? Colors.white70 : Colors.black54,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: secondaryTextColor, fontSize: 10),
             ),
           ],
         ),
