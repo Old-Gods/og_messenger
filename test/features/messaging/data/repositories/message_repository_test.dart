@@ -13,10 +13,6 @@ void main() {
       repository = TestMessageRepository();
     });
 
-    tearDown() {
-      repository.clearStorage();
-    }
-
     group('message operations', () {
       test('saves message successfully', () async {
         final now = DateTime.now().microsecondsSinceEpoch;
