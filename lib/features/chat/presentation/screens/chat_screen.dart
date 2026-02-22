@@ -126,6 +126,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         actions: [
           TextButton(
             onPressed: () async {
+              // Get navigator before async operations
+              final navigator = Navigator.of(context, rootNavigator: true);
+
               // Clear security data
               await SecurityService.instance.clearSecurityData();
 
@@ -134,10 +137,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
               // Navigate to setup
               if (mounted) {
-                Navigator.of(
-                  context,
-                  rootNavigator: true,
-                ).pushReplacementNamed('/setup');
+                navigator.pushReplacementNamed('/setup');
               }
             },
             child: const Text('Re-authenticate'),
