@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/Old-Gods/og_messenger/compare/v1.1.0...v1.2.0) (2026-02-22)
+
+
+### Features
+
+* add network connectivity monitoring and handling ([4b21a22](https://github.com/Old-Gods/og_messenger/commit/4b21a22af32543f350c92e727e644850efd95898))
+* add network connectivity monitoring and handling ([d7f92cb](https://github.com/Old-Gods/og_messenger/commit/d7f92cb73e99660311b3fe2ca5fd709f4d9ec92d))
+* **chat:** enhance message bubble to display peer connection status ([3a234fe](https://github.com/Old-Gods/og_messenger/commit/3a234fe0b3b07be9f03ad56ba801ab6e3a0dfd4e))
+* **chat:** implement typing indicators and related configurations ([316ab00](https://github.com/Old-Gods/og_messenger/commit/316ab00365eb142dd0f65b25f6412eccb592eb24))
+
+
+### Bug Fixes
+
+* optimize navigator usage in re-authentication flow ([0e10589](https://github.com/Old-Gods/og_messenger/commit/0e105895d1f14c4e9105f0dd6edd3cdd2f40def2))
+
 ## [1.1.0](https://github.com/Old-Gods/og_messenger/compare/v1.0.2...v1.1.0) (2026-02-21)
 
 
