@@ -27,7 +27,10 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      # TODO: Move to v4 once
+      # {@link https://github.com/googleapis/release-please-action/pull/1187}
+      # has been merged
+      - uses: googleapis/release-please-action@main
         id: release
         with:
           token: ${{ secrets.GH_TOKEN }}
