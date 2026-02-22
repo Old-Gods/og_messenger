@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Old-Gods/og_messenger/compare/v1.2.0...v1.2.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* **network:** implement network ID refresh on macOS location permission grant ([9d9e4ed](https://github.com/Old-Gods/og_messenger/commit/9d9e4ed6ad27b52854150ba58977cc14d7a58dc9))
+
 ## [1.2.0](https://github.com/Old-Gods/og_messenger/compare/v1.1.0...v1.2.0) (2026-02-22)
 
 
