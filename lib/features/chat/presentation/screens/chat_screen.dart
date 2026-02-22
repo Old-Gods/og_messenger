@@ -40,6 +40,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     WidgetsBinding.instance.addObserver(this);
     _initializeServices();
     _setupNetworkMonitoring();
+    // Add scroll listener for pagination
+    _scrollController.addListener(_onScroll);
     // Scroll to bottom after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
@@ -150,14 +152,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void _scrollToBottom({bool animate = true}) {
     if (!_scrollController.hasClients) return;
 
+    // With reverse: true, position 0 is at the bottom (newest messages)
     if (animate) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     } else {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      _scrollController.jumpTo(0);
+    }
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+
+    final messageNotifier = ref.read(messageProvider.notifier);
+    final messageState = ref.read(messageProvider);
+
+    // Load older messages when scrolling to bottom (top in reverse view)
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 100) {
+      if (messageState.hasMoreOlder && !messageState.isLoadingMore) {
+        messageNotifier.loadOlderMessages();
+      }
+    }
+
+    // Load newer messages when scrolling to top (bottom in reverse view)
+    if (_scrollController.position.pixels <=
+        _scrollController.position.minScrollExtent + 100) {
+      if (messageState.hasMoreNewer && !messageState.isLoadingNewer) {
+        messageNotifier.loadNewerMessages();
+      }
     }
   }
 
@@ -367,8 +393,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final discoveryState = ref.watch(discoveryProvider);
     final settings = ref.watch(settingsProvider);
 
-    // Auto-scroll when new messages arrive
-    if (messageState.messages.length != _previousMessageCount) {
+    // Auto-scroll when new messages arrive, but only in live mode
+    if (messageState.messages.length != _previousMessageCount &&
+        messageState.isInLiveMode) {
       _previousMessageCount = messageState.messages.length;
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
@@ -515,10 +542,50 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   )
                 : ListView.builder(
                     controller: _scrollController,
+                    reverse: true,
                     padding: const EdgeInsets.all(8),
-                    itemCount: messageState.messages.length,
+                    itemCount:
+                        messageState.messages.length +
+                        (messageState.isLoadingMore ? 1 : 0) +
+                        (messageState.isLoadingNewer ? 1 : 0),
                     itemBuilder: (context, index) {
-                      final message = messageState.messages[index];
+                      // Show loading indicator at top (newer messages)
+                      if (index == 0 && messageState.isLoadingNewer) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Adjust index for loading indicator
+                      final messageIndex = messageState.isLoadingNewer
+                          ? index - 1
+                          : index;
+
+                      // Show loading indicator at bottom (older messages)
+                      if (messageIndex >= messageState.messages.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Reverse index since we're using reverse: true
+                      final reversedIndex =
+                          messageState.messages.length - 1 - messageIndex;
+                      final message = messageState.messages[reversedIndex];
                       return _MessageBubble(
                         message: message,
                         isOwn: message.senderId == settings.deviceId,
