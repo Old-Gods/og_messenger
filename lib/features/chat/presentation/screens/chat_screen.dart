@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/utils/color_utils.dart';
+import '../../../security/data/services/security_service.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../messaging/providers/color_assignment_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -16,7 +18,8 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen>
+    with WidgetsBindingObserver {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final _messageFocusNode = FocusNode();
@@ -26,21 +29,122 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   DateTime? _lastTypingIndicatorSent;
   Timer? _typingThrottleTimer;
 
+  // Network monitoring
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  String? _initialNetworkId;
+  final Connectivity _connectivity = Connectivity();
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeServices();
+    _setupNetworkMonitoring();
     // Scroll to bottom after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
     _messageFocusNode.dispose();
     _typingThrottleTimer?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // Pause network monitoring when app goes to background
+      _connectivitySubscription?.cancel();
+      _connectivitySubscription = null;
+    } else if (state == AppLifecycleState.resumed) {
+      // Resume network monitoring when app comes back
+      _setupNetworkMonitoring();
+    }
+  }
+
+  void _setupNetworkMonitoring() {
+    // Store initial network ID
+    final settings = ref.read(settingsProvider);
+    _initialNetworkId = settings.networkId;
+
+    // Listen to connectivity changes
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) async {
+      await _handleConnectivityChange(results);
+    });
+  }
+
+  Future<void> _handleConnectivityChange(
+    List<ConnectivityResult> results,
+  ) async {
+    final isConnected = !results.contains(ConnectivityResult.none);
+
+    // Refresh network ID
+    await ref.read(settingsProvider.notifier).refreshNetworkId();
+    final currentSettings = ref.read(settingsProvider);
+    final currentNetworkId = currentSettings.networkId;
+
+    // Treat 'Unknown' network ID as disconnected (not on valid WiFi)
+    final isValidNetwork =
+        currentNetworkId != 'Unknown' && currentNetworkId.isNotEmpty;
+    final effectivelyConnected = isConnected && isValidNetwork;
+
+    // Update connectivity status
+    ref
+        .read(settingsProvider.notifier)
+        .updateNetworkStatus(
+          networkId: currentNetworkId,
+          isConnected: effectivelyConnected,
+        );
+
+    // Check if network has changed
+    if (isValidNetwork &&
+        currentNetworkId != _initialNetworkId &&
+        currentNetworkId != 'Unknown') {
+      _showNetworkSwitchDialog();
+    }
+  }
+
+  void _showNetworkSwitchDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Network Changed'),
+        content: const Text(
+          'You\'ve switched networks. Please re-authenticate for security.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              // Clear security data
+              await SecurityService.instance.clearSecurityData();
+
+              // Stop discovery
+              await ref.read(discoveryProvider.notifier).stop();
+
+              // Navigate to setup
+              if (mounted) {
+                Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pushReplacementNamed('/setup');
+              }
+            },
+            child: const Text('Re-authenticate'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _scrollToBottom({bool animate = true}) {
@@ -161,6 +265,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _sendMessage() async {
     final content = _messageController.text.trim();
     if (content.isEmpty) return;
+
+    // Check network connectivity
+    final settings = ref.read(settingsProvider);
+    if (!settings.isConnected ||
+        settings.connectedNetworkId != _initialNetworkId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Cannot send message: Network disconnected or changed',
+          ),
+          backgroundColor: Colors.orange,
+          action: SnackBarAction(
+            label: 'Dismiss',
+            onPressed: () {},
+            textColor: Colors.white,
+          ),
+        ),
+      );
+      return;
+    }
 
     // Validate message size
     final messageBytes = content.codeUnits.length;
@@ -320,6 +444,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
 
+          // Network disconnected banner
+          if (_isInitialized && !settings.isConnected)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.orange,
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'Network disconnected',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+
           // Error banner
           if (messageState.error != null)
             Container(
@@ -418,10 +560,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   child: TextField(
                     controller: _messageController,
                     focusNode: _messageFocusNode,
-                    decoration: const InputDecoration(
-                      hintText: 'Type a message...',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
+                    enabled:
+                        settings.isConnected &&
+                        settings.connectedNetworkId == _initialNetworkId,
+                    decoration: InputDecoration(
+                      hintText:
+                          settings.isConnected &&
+                              settings.connectedNetworkId == _initialNetworkId
+                          ? 'Type a message...'
+                          : 'Network unavailable',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
                       ),
@@ -435,7 +584,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
+                  onPressed:
+                      settings.isConnected &&
+                          settings.connectedNetworkId == _initialNetworkId
+                      ? _sendMessage
+                      : null,
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ],

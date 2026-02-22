@@ -55,9 +55,19 @@ class DiscoveryNotifier extends Notifier<DiscoveryState> {
     final settings = ref.read(settingsProvider);
     final deviceId = settings.deviceId;
     final userName = settings.userName;
+    final networkId = settings.networkId;
 
     if (deviceId == null || userName == null) {
       state = state.copyWith(error: 'Device not properly configured');
+      return false;
+    }
+
+    // Prevent discovery when not on a valid WiFi network
+    if (networkId == 'Unknown' || networkId.isEmpty) {
+      state = state.copyWith(
+        error:
+            'WiFi network required. Please connect to WiFi to use OG Messenger.',
+      );
       return false;
     }
 

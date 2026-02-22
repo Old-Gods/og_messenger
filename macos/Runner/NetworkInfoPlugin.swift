@@ -2,14 +2,8 @@ import Cocoa
 import FlutterMacOS
 import CoreWLAN
 
-public class NetworkInfoPlugin: NSObject, FlutterPlugin {
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "com.ogmessenger.network_info", binaryMessenger: registrar.messenger)
-    let instance = NetworkInfoPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
-
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+class NetworkInfoHelper {
+  static func handleMethodCall(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "getWifiSSID":
       result(getWifiSSID())
@@ -18,7 +12,7 @@ public class NetworkInfoPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func getWifiSSID() -> String? {
+  static func getWifiSSID() -> String? {
     guard let interface = CWWiFiClient.shared().interface() else {
       print("⚠️ CoreWLAN: No WiFi interface found")
       return nil

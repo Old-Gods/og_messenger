@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -6,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 class NetworkInfoService {
   static final NetworkInfoService instance = NetworkInfoService._();
   final NetworkInfo _networkInfo = NetworkInfo();
+  static const _macOSChannel = MethodChannel('com.ogmessenger.network_info');
   bool _permissionRequested = false;
 
   NetworkInfoService._();
@@ -49,18 +51,41 @@ class NetworkInfoService {
     }
   }
 
-  /// Get the current WiFi SSID
-  /// Returns the SSID or IP-based identifier if unable to determine
+  /// Get the current WiFi SSID for network identification
+  ///
+  /// IMPORTANT: This method ONLY returns the WiFi SSID. There is NO fallback
+  /// to IP addresses. If SSID cannot be determined, returns 'Unknown'.
+  ///
+  /// This ensures proper network isolation - devices on different WiFi networks
+  /// will not see each other's messages, even if they use the same IP subnet.
+  ///
+  /// Platform-specific behavior:
+  /// - macOS: Uses CoreWLAN framework (requires Location Services permission)
+  /// - iOS/Android: Uses network_info_plus (requires location permission)
+  /// - Other platforms: Uses network_info_plus
+  ///
+  /// Returns the SSID string or 'Unknown' if unable to determine
   Future<String> getCurrentNetworkId() async {
     try {
-      // Request location permission first (not needed on macOS)
-      if (!Platform.isMacOS) {
-        await requestLocationPermission();
-      }
+      String? ssid;
 
-      print('🔍 Attempting to get WiFi SSID...');
-      final ssid = await _networkInfo.getWifiName();
-      print('📡 Raw SSID value: "$ssid"');
+      // Use CoreWLAN on macOS via method channel
+      if (Platform.isMacOS) {
+        print('🔍 macOS: Using CoreWLAN to get WiFi SSID...');
+        try {
+          ssid = await _macOSChannel.invokeMethod<String>('getWifiSSID');
+          print('📡 CoreWLAN SSID value: "$ssid"');
+        } catch (e) {
+          print('⚠️ CoreWLAN failed: $e');
+          ssid = null;
+        }
+      } else {
+        // Use network_info_plus on other platforms (with location permission)
+        await requestLocationPermission();
+        print('🔍 Attempting to get WiFi SSID...');
+        ssid = await _networkInfo.getWifiName();
+        print('📡 Raw SSID value: "$ssid"');
+      }
 
       // Remove quotes that iOS/Android sometimes add
       String cleanSsid = ssid ?? 'Unknown';
@@ -68,23 +93,12 @@ class NetworkInfoService {
         cleanSsid = cleanSsid.substring(1, cleanSsid.length - 1);
       }
 
-      // If we couldn't get SSID, try to use IP address prefix as fallback
       if (cleanSsid == 'Unknown' || cleanSsid.isEmpty) {
-        print('⚠️ Could not get SSID, trying IP address fallback...');
-        final ipAddress = await _networkInfo.getWifiIP();
-        print('📡 WiFi IP: $ipAddress');
-        if (ipAddress != null && ipAddress.isNotEmpty) {
-          // Use first 3 octets as network identifier
-          final parts = ipAddress.split('.');
-          if (parts.length >= 3) {
-            cleanSsid = '${parts[0]}.${parts[1]}.${parts[2]}.x';
-            print('✅ Using IP-based network ID: $cleanSsid');
-          }
-        }
-      } else {
-        print('✅ Network SSID detected: $cleanSsid');
+        print('❌ Could not get SSID - network identification will fail');
+        return 'Unknown';
       }
 
+      print('✅ Network SSID detected: $cleanSsid');
       return cleanSsid;
     } catch (e) {
       print('⚠️ Failed to get network ID: $e');
