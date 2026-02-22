@@ -19,11 +19,39 @@ class MessageState {
   final String? error;
   final Map<String, DateTime> typingPeers; // deviceId -> last typing time
 
+  // Pagination fields
+  final bool isLoadingMore; // Loading older messages
+  final bool isLoadingNewer; // Loading newer messages
+  final bool hasMoreOlder; // Can load older messages
+  final bool hasMoreNewer; // Can load newer messages
+  final bool isInLiveMode; // True if viewing latest messages
+  final int? oldestTimestamp; // Timestamp of oldest message in window
+  final int? newestTimestamp; // Timestamp of newest message in window
+
+  // Sync fields
+  final bool syncInProgress; // Currently syncing
+  final String? currentSyncPeer; // Name of peer being synced
+  final int? syncProgress; // Last synced timestamp for resumption
+  final List<String> syncFailedPeers; // Peers that failed to sync
+  final bool isInitialSync; // True for first sync, false for background
+
   const MessageState({
     this.messages = const [],
     this.isLoading = false,
     this.error,
     this.typingPeers = const {},
+    this.isLoadingMore = false,
+    this.isLoadingNewer = false,
+    this.hasMoreOlder = false,
+    this.hasMoreNewer = false,
+    this.isInLiveMode = true,
+    this.oldestTimestamp,
+    this.newestTimestamp,
+    this.syncInProgress = false,
+    this.currentSyncPeer,
+    this.syncProgress,
+    this.syncFailedPeers = const [],
+    this.isInitialSync = false,
   });
 
   MessageState copyWith({
@@ -31,12 +59,36 @@ class MessageState {
     bool? isLoading,
     String? error,
     Map<String, DateTime>? typingPeers,
+    bool? isLoadingMore,
+    bool? isLoadingNewer,
+    bool? hasMoreOlder,
+    bool? hasMoreNewer,
+    bool? isInLiveMode,
+    int? oldestTimestamp,
+    int? newestTimestamp,
+    bool? syncInProgress,
+    String? currentSyncPeer,
+    int? syncProgress,
+    List<String>? syncFailedPeers,
+    bool? isInitialSync,
   }) {
     return MessageState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
       typingPeers: typingPeers ?? this.typingPeers,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      isLoadingNewer: isLoadingNewer ?? this.isLoadingNewer,
+      hasMoreOlder: hasMoreOlder ?? this.hasMoreOlder,
+      hasMoreNewer: hasMoreNewer ?? this.hasMoreNewer,
+      isInLiveMode: isInLiveMode ?? this.isInLiveMode,
+      oldestTimestamp: oldestTimestamp ?? this.oldestTimestamp,
+      newestTimestamp: newestTimestamp ?? this.newestTimestamp,
+      syncInProgress: syncInProgress ?? this.syncInProgress,
+      currentSyncPeer: currentSyncPeer ?? this.currentSyncPeer,
+      syncProgress: syncProgress ?? this.syncProgress,
+      syncFailedPeers: syncFailedPeers ?? this.syncFailedPeers,
+      isInitialSync: isInitialSync ?? this.isInitialSync,
     );
   }
 }
@@ -72,7 +124,7 @@ class MessageNotifier extends Notifier<MessageState> {
     _startTypingCleanupTimer();
 
     // Schedule async load after build completes
-    Future.microtask(() => loadMessages());
+    Future.microtask(() => loadInitialMessages());
 
     // Clean up timer when provider is disposed
     ref.onDispose(() {
@@ -122,6 +174,7 @@ class MessageNotifier extends Notifier<MessageState> {
   }
 
   /// Load all messages from database
+  @Deprecated('Use loadInitialMessages() for paginated loading')
   Future<void> loadMessages() async {
     state = state.copyWith(isLoading: true);
 
@@ -153,6 +206,210 @@ class MessageNotifier extends Notifier<MessageState> {
         messages: state.messages,
         isLoading: false,
         error: 'Failed to load messages: $e',
+      );
+    }
+  }
+
+  /// Load initial messages (most recent 50) from database
+  Future<void> loadInitialMessages() async {
+    state = state.copyWith(isLoading: true);
+
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId ?? '';
+      final networkId = settings.networkId;
+
+      // Show warning if not on valid WiFi network
+      if (networkId == 'Unknown' || networkId.isEmpty) {
+        print('⚠️ Not on valid WiFi network - no messages available');
+        state = MessageState(
+          messages: const [],
+          isLoading: false,
+          error: 'WiFi network required',
+        );
+        return;
+      }
+
+      final messages = await _repository.getInitialMessages(
+        deviceId,
+        networkId,
+        50,
+      );
+
+      final oldestTimestamp = messages.isNotEmpty
+          ? messages.first.timestampMicros
+          : null;
+      final newestTimestamp = messages.isNotEmpty
+          ? messages.last.timestampMicros
+          : null;
+
+      // Check if there are more older messages
+      final hasMoreOlder = messages.length == 50;
+
+      print(
+        '📚 Loaded ${messages.length} initial messages from database (network: $networkId)',
+      );
+
+      state = MessageState(
+        messages: messages,
+        isLoading: false,
+        isInLiveMode: true,
+        hasMoreOlder: hasMoreOlder,
+        hasMoreNewer: false,
+        oldestTimestamp: oldestTimestamp,
+        newestTimestamp: newestTimestamp,
+      );
+    } catch (e) {
+      print('❌ Failed to load messages: $e');
+      state = MessageState(
+        messages: state.messages,
+        isLoading: false,
+        error: 'Failed to load messages: $e',
+      );
+    }
+  }
+
+  /// Load older messages (pagination backwards)
+  Future<void> loadOlderMessages() async {
+    // Don't load if already loading or no more messages
+    if (state.isLoadingMore ||
+        !state.hasMoreOlder ||
+        state.oldestTimestamp == null) {
+      return;
+    }
+
+    state = state.copyWith(isLoadingMore: true);
+
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId ?? '';
+      final networkId = settings.networkId;
+
+      final olderMessages = await _repository.getMessagesBeforeTimestamp(
+        deviceId,
+        networkId,
+        state.oldestTimestamp!,
+        25,
+      );
+
+      if (olderMessages.isEmpty) {
+        print('📚 No more older messages');
+        state = state.copyWith(isLoadingMore: false, hasMoreOlder: false);
+        return;
+      }
+
+      print('📚 Loaded ${olderMessages.length} older messages');
+
+      // Prepend older messages
+      final updatedMessages = [...olderMessages, ...state.messages];
+
+      // Evict newest 25 messages if window exceeds 200
+      if (updatedMessages.length > 200) {
+        updatedMessages.removeRange(
+          updatedMessages.length - 25,
+          updatedMessages.length,
+        );
+        print(
+          '🗑️ Evicted 25 newest messages (window size: ${updatedMessages.length})',
+        );
+      }
+
+      final oldestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.first.timestampMicros
+          : null;
+      final newestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.last.timestampMicros
+          : null;
+      final hasMoreOlder = olderMessages.length == 25;
+
+      state = state.copyWith(
+        messages: updatedMessages,
+        isLoadingMore: false,
+        isInLiveMode: false,
+        hasMoreOlder: hasMoreOlder,
+        oldestTimestamp: oldestTimestamp,
+        newestTimestamp: newestTimestamp,
+      );
+    } catch (e) {
+      print('❌ Failed to load older messages: $e');
+      state = state.copyWith(
+        isLoadingMore: false,
+        error: 'Failed to load older messages: $e',
+      );
+    }
+  }
+
+  /// Load newer messages (pagination forwards)
+  Future<void> loadNewerMessages() async {
+    // Don't load if already loading or no more messages
+    if (state.isLoadingNewer ||
+        !state.hasMoreNewer ||
+        state.newestTimestamp == null) {
+      return;
+    }
+
+    state = state.copyWith(isLoadingNewer: true);
+
+    try {
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId ?? '';
+      final networkId = settings.networkId;
+
+      final newerMessages = await _repository
+          .getMessagesAfterTimestampPaginated(
+            deviceId,
+            networkId,
+            state.newestTimestamp!,
+            25,
+          );
+
+      if (newerMessages.isEmpty) {
+        print('📚 No more newer messages - reached live end');
+        state = state.copyWith(
+          isLoadingNewer: false,
+          hasMoreNewer: false,
+          isInLiveMode: true,
+        );
+        return;
+      }
+
+      print('📚 Loaded ${newerMessages.length} newer messages');
+
+      // Append newer messages
+      final updatedMessages = [...state.messages, ...newerMessages];
+
+      // Evict oldest 25 messages if window exceeds 200
+      if (updatedMessages.length > 200) {
+        updatedMessages.removeRange(0, 25);
+        print(
+          '🗑️ Evicted 25 oldest messages (window size: ${updatedMessages.length})',
+        );
+      }
+
+      final oldestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.first.timestampMicros
+          : null;
+      final newestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.last.timestampMicros
+          : null;
+
+      // Check if we've reached the live end
+      final hasMoreNewer = newerMessages.length == 25;
+      final isInLiveMode = !hasMoreNewer;
+
+      state = state.copyWith(
+        messages: updatedMessages,
+        isLoadingNewer: false,
+        hasMoreNewer: hasMoreNewer,
+        isInLiveMode: isInLiveMode,
+        oldestTimestamp: oldestTimestamp,
+        newestTimestamp: newestTimestamp,
+      );
+    } catch (e) {
+      print('❌ Failed to load newer messages: $e');
+      state = state.copyWith(
+        isLoadingNewer: false,
+        error: 'Failed to load newer messages: $e',
       );
     }
   }
@@ -195,12 +452,49 @@ class MessageNotifier extends Notifier<MessageState> {
       // Save to database
       await _repository.saveMessage(message, deviceId, networkId);
 
-      // Update state
-      final updatedMessages = [...state.messages, message];
-      updatedMessages.sort(
-        (a, b) => a.timestampMicros.compareTo(b.timestampMicros),
-      );
-      state = state.copyWith(messages: updatedMessages);
+      // Only update window if in live mode
+      if (state.isInLiveMode) {
+        final updatedMessages = [...state.messages];
+
+        // Fast path: check if we can just append (most common case)
+        if (updatedMessages.isEmpty ||
+            updatedMessages.last.timestampMicros <= message.timestampMicros) {
+          updatedMessages.add(message);
+        } else {
+          // Search backwards from the end to find insertion point
+          int insertIndex = _findInsertIndexFromEnd(
+            updatedMessages,
+            message.timestampMicros,
+          );
+          updatedMessages.insert(insertIndex, message);
+        }
+
+        // Evict oldest 25 messages if window exceeds 200
+        if (updatedMessages.length > 200) {
+          updatedMessages.removeRange(0, 25);
+          print(
+            '🗑️ Evicted 25 oldest messages (window size: ${updatedMessages.length})',
+          );
+        }
+
+        // Update timestamps
+        final oldestTimestamp = updatedMessages.isNotEmpty
+            ? updatedMessages.first.timestampMicros
+            : null;
+        final newestTimestamp = updatedMessages.isNotEmpty
+            ? updatedMessages.last.timestampMicros
+            : null;
+
+        state = state.copyWith(
+          messages: updatedMessages,
+          oldestTimestamp: oldestTimestamp,
+          newestTimestamp: newestTimestamp,
+        );
+      } else {
+        print(
+          '📥 Message saved to database (not in live mode, skipping window update)',
+        );
+      }
 
       // Show notification only if app is in background
       if (!_isAppInForeground) {
@@ -226,6 +520,19 @@ class MessageNotifier extends Notifier<MessageState> {
   /// Handle TCP server error
   void _handleError(String error) {
     state = state.copyWith(error: error);
+  }
+
+  /// Find insertion index by searching backwards from the end - O(n) worst case, O(1) typical
+  int _findInsertIndexFromEnd(List<Message> messages, int timestamp) {
+    // Search backwards from the end
+    for (int i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].timestampMicros <= timestamp) {
+        return i + 1; // Insert after this message
+      }
+    }
+
+    // Message is older than all existing messages
+    return 0;
   }
 
   /// Handle peer changes - sync with new peers
@@ -576,12 +883,43 @@ class MessageNotifier extends Notifier<MessageState> {
       final networkId = settings.networkId;
       await _repository.saveMessage(message, deviceId, networkId);
 
-      // Update local state
-      final updatedMessages = [...state.messages, message];
-      updatedMessages.sort(
-        (a, b) => a.timestampMicros.compareTo(b.timestampMicros),
+      // Update local state with optimized insertion
+      final updatedMessages = [...state.messages];
+
+      // Fast path: check if we can just append (most common case for sent messages)
+      if (updatedMessages.isEmpty ||
+          updatedMessages.last.timestampMicros <= message.timestampMicros) {
+        updatedMessages.add(message);
+      } else {
+        // Search backwards from the end to find insertion point
+        int insertIndex = _findInsertIndexFromEnd(
+          updatedMessages,
+          message.timestampMicros,
+        );
+        updatedMessages.insert(insertIndex, message);
+      }
+
+      // Evict oldest 25 messages if window exceeds 200
+      if (updatedMessages.length > 200) {
+        updatedMessages.removeRange(0, 25);
+        print(
+          '🗑️ Evicted 25 oldest messages (window size: ${updatedMessages.length})',
+        );
+      }
+
+      // Update timestamps
+      final oldestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.first.timestampMicros
+          : null;
+      final newestTimestamp = updatedMessages.isNotEmpty
+          ? updatedMessages.last.timestampMicros
+          : null;
+
+      state = state.copyWith(
+        messages: updatedMessages,
+        oldestTimestamp: oldestTimestamp,
+        newestTimestamp: newestTimestamp,
       );
-      state = state.copyWith(messages: updatedMessages);
 
       // Send to all discovered peers
       final discoveryState = ref.read(discoveryProvider);

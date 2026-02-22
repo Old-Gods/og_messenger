@@ -112,6 +112,71 @@ class DatabaseService {
     return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
   }
 
+  /// Get messages before a specific timestamp for a specific network (for pagination)
+  Future<List<MessageSchema>> getMessagesBeforeTimestamp(
+    String networkId,
+    int beforeTimestamp,
+    int limit,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      MessageSchema.tableName,
+      where:
+          '${MessageSchema.columnTimestampMicros} < ? AND ${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [beforeTimestamp, networkId],
+      orderBy: '${MessageSchema.columnTimestampMicros} DESC',
+      limit: limit,
+    );
+
+    // Reverse to get ascending order
+    final results = List.generate(
+      maps.length,
+      (i) => MessageSchema.fromMap(maps[i]),
+    );
+    return results.reversed.toList();
+  }
+
+  /// Get messages after a specific timestamp for a specific network with limit (for pagination)
+  Future<List<MessageSchema>> getMessagesAfterTimestampPaginated(
+    String networkId,
+    int afterTimestamp,
+    int limit,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      MessageSchema.tableName,
+      where:
+          '${MessageSchema.columnTimestampMicros} > ? AND ${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [afterTimestamp, networkId],
+      orderBy: '${MessageSchema.columnTimestampMicros} ASC',
+      limit: limit,
+    );
+
+    return List.generate(maps.length, (i) => MessageSchema.fromMap(maps[i]));
+  }
+
+  /// Get the most recent N messages for a specific network (for initial load)
+  Future<List<MessageSchema>> getInitialMessages(
+    String networkId,
+    int limit,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      MessageSchema.tableName,
+      where: '${MessageSchema.columnNetworkId} = ?',
+      whereArgs: [networkId],
+      orderBy: '${MessageSchema.columnTimestampMicros} DESC',
+      limit: limit,
+    );
+
+    // Reverse to get ascending order (oldest to newest)
+    final results = List.generate(
+      maps.length,
+      (i) => MessageSchema.fromMap(maps[i]),
+    );
+    return results.reversed.toList();
+  }
+
   /// Get the most recent message timestamp for a specific network (for sync purposes)
   Future<int?> getLatestTimestamp(String networkId) async {
     final db = await database;
