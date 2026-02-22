@@ -67,6 +67,17 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> initialize() async {
     print('⚙️ Initializing settings provider...');
     await _service.initialize();
+
+    // Register callback for macOS location permission grant
+    NetworkInfoService.instance.setNetworkIdRefreshCallback((networkId) {
+      print('🔄 Network ID refreshed after permission grant: $networkId');
+      state = state.copyWith(
+        networkId: networkId,
+        isConnected: networkId != 'Unknown' && networkId.isNotEmpty,
+        connectedNetworkId: networkId,
+      );
+    });
+
     print('⚙️ Fetching network ID...');
     final networkId = await NetworkInfoService.instance.getCurrentNetworkId();
     print('⚙️ Network ID result: $networkId');

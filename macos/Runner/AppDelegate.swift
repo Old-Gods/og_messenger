@@ -8,6 +8,7 @@ import CoreLocation
 class AppDelegate: FlutterAppDelegate, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
   private var locationAuthorizationGranted = false
+  private var methodChannel: FlutterMethodChannel?
   
   override func applicationDidFinishLaunching(_ notification: Notification) {
     let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
@@ -43,6 +44,7 @@ class AppDelegate: FlutterAppDelegate, CLLocationManagerDelegate {
     // Register network info method channel
     let networkPluginRegistrar = controller.registrar(forPlugin: "NetworkInfoPlugin")
     let channel = FlutterMethodChannel(name: "com.ogmessenger.network_info", binaryMessenger: networkPluginRegistrar.messenger)
+    methodChannel = channel // Store reference for later use
     
     channel.setMethodCallHandler { (call, result) in
       if call.method == "getWifiSSID" {
@@ -63,6 +65,10 @@ class AppDelegate: FlutterAppDelegate, CLLocationManagerDelegate {
       if status == .authorizedAlways || status == .authorized {
         locationAuthorizationGranted = true
         print("✅ Location authorization granted")
+        
+        // Notify Flutter that permissions were granted so it can refresh network ID
+        print("📡 Notifying Flutter to refresh network ID...")
+        methodChannel?.invokeMethod("onLocationPermissionGranted", arguments: nil)
       } else {
         locationAuthorizationGranted = false
         print("⚠️ Location authorization denied or restricted")

@@ -3,14 +3,39 @@ import 'package:flutter/services.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Callback type for network ID refresh
+typedef NetworkIdRefreshCallback = void Function(String networkId);
+
 /// Service for getting network information
 class NetworkInfoService {
   static final NetworkInfoService instance = NetworkInfoService._();
   final NetworkInfo _networkInfo = NetworkInfo();
   static const _macOSChannel = MethodChannel('com.ogmessenger.network_info');
   bool _permissionRequested = false;
+  NetworkIdRefreshCallback? _onNetworkIdRefresh;
 
-  NetworkInfoService._();
+  NetworkInfoService._() {
+    // Set up method call handler for macOS location permission callback
+    if (Platform.isMacOS) {
+      _macOSChannel.setMethodCallHandler(_handleMethodCall);
+    }
+  }
+
+  /// Handle method calls from native code
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    if (call.method == 'onLocationPermissionGranted') {
+      print('📡 Received location permission granted callback from macOS');
+      // Refresh network ID
+      final networkId = await getCurrentNetworkId();
+      // Notify listener (settings provider)
+      _onNetworkIdRefresh?.call(networkId);
+    }
+  }
+
+  /// Set callback for network ID refresh (called when permissions are granted)
+  void setNetworkIdRefreshCallback(NetworkIdRefreshCallback callback) {
+    _onNetworkIdRefresh = callback;
+  }
 
   /// Request location permission (needed for WiFi SSID on iOS/Android)
   /// Note: macOS doesn't support runtime location permissions
