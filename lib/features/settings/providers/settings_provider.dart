@@ -10,6 +10,8 @@ class SettingsState {
   final int retentionDays;
   final bool isFirstLaunch;
   final String networkId;
+  final bool isConnected;
+  final String connectedNetworkId;
 
   const SettingsState({
     this.deviceId,
@@ -17,6 +19,8 @@ class SettingsState {
     required this.retentionDays,
     required this.isFirstLaunch,
     this.networkId = 'Unknown',
+    this.isConnected = true,
+    this.connectedNetworkId = 'Unknown',
   });
 
   bool get hasUserName {
@@ -29,6 +33,8 @@ class SettingsState {
     int? retentionDays,
     bool? isFirstLaunch,
     String? networkId,
+    bool? isConnected,
+    String? connectedNetworkId,
   }) {
     return SettingsState(
       deviceId: deviceId ?? this.deviceId,
@@ -36,6 +42,8 @@ class SettingsState {
       retentionDays: retentionDays ?? this.retentionDays,
       isFirstLaunch: isFirstLaunch ?? this.isFirstLaunch,
       networkId: networkId ?? this.networkId,
+      isConnected: isConnected ?? this.isConnected,
+      connectedNetworkId: connectedNetworkId ?? this.connectedNetworkId,
     );
   }
 }
@@ -101,6 +109,18 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> refreshNetworkId() async {
     final networkId = await NetworkInfoService.instance.getCurrentNetworkId();
     state = state.copyWith(networkId: networkId);
+  }
+
+  /// Update network connectivity status
+  void updateNetworkStatus({
+    required String networkId,
+    required bool isConnected,
+  }) {
+    state = state.copyWith(
+      networkId: networkId,
+      isConnected: isConnected,
+      connectedNetworkId: networkId,
+    );
   }
 
   /// Reset all settings

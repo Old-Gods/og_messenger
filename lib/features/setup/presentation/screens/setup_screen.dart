@@ -661,6 +661,25 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   Future<void> _saveName() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Check if connected to a valid network
+    final settings = ref.read(settingsProvider);
+    if (settings.networkId == 'Unknown') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please connect to a LAN network'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {},
+              textColor: Colors.white,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {

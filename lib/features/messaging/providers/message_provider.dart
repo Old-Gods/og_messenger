@@ -129,6 +129,18 @@ class MessageNotifier extends Notifier<MessageState> {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
       final networkId = settings.networkId;
+
+      // Show warning if not on valid WiFi network
+      if (networkId == 'Unknown' || networkId.isEmpty) {
+        print('⚠️ Not on valid WiFi network - no messages available');
+        state = MessageState(
+          messages: const [],
+          isLoading: false,
+          error: 'WiFi network required',
+        );
+        return;
+      }
+
       final messages = await _repository.getAllMessages(deviceId, networkId);
 
       print(
@@ -151,6 +163,12 @@ class MessageNotifier extends Notifier<MessageState> {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
       final networkId = settings.networkId;
+
+      // Reject messages when not on a valid WiFi network
+      if (networkId == 'Unknown' || networkId.isEmpty) {
+        print('⚠️ Rejecting message - not on valid WiFi network');
+        return;
+      }
 
       // Clear typing indicator for this sender
       final updated = Map<String, DateTime>.from(state.typingPeers);
@@ -517,9 +535,19 @@ class MessageNotifier extends Notifier<MessageState> {
     final settings = ref.read(settingsProvider);
     final deviceId = settings.deviceId;
     final userName = settings.userName;
+    final networkId = settings.networkId;
 
     if (deviceId == null || userName == null) {
-      state = state.copyWith(error: 'Device not properly configured');
+      state = state.copyWith(error: 'Not configured properly');
+      return;
+    }
+
+    // Prevent sending messages when not on a valid WiFi network
+    if (networkId == 'Unknown' || networkId.isEmpty) {
+      state = state.copyWith(
+        error:
+            'WiFi network required. Please connect to WiFi to send messages.',
+      );
       return;
     }
 

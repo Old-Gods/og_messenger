@@ -68,7 +68,10 @@ class UdpDiscoveryService {
       print('📶 Available network interfaces:');
       NetworkInterface? selectedInterface;
       InternetAddress? selectedAddress;
+      NetworkInterface? fallbackInterface;
+      InternetAddress? fallbackAddress;
 
+      // First pass: look for preferred WiFi/Ethernet interfaces with LAN IPs
       for (var interface in interfaces) {
         for (var addr in interface.addresses) {
           print('   ${interface.name}: ${addr.address}');
@@ -81,7 +84,15 @@ class UdpDiscoveryService {
             continue;
           }
 
-          // Prefer WiFi (en0) or Ethernet (en1) interfaces
+          // Skip mobile data interfaces (Android)
+          if (interface.name.startsWith('rmnet') ||
+              interface.name.startsWith('v4-rmnet') ||
+              interface.name.startsWith('ccmni')) {
+            print('   ⏭️ Skipping mobile data interface: ${interface.name}');
+            continue;
+          }
+
+          // Prefer WiFi (en0, wlan0) or Ethernet (en1, eth0) interfaces
           // And prefer 192.168.x.x or 10.x.x.x networks (common LAN ranges)
           final ip = addr.address;
           if ((interface.name == 'en0' ||
@@ -96,13 +107,21 @@ class UdpDiscoveryService {
             break;
           }
 
-          // Fallback: use any non-VPN interface
-          if (selectedInterface == null) {
-            selectedInterface = interface;
-            selectedAddress = addr;
+          // Store first non-VPN, non-mobile interface as fallback
+          if (fallbackInterface == null) {
+            fallbackInterface = interface;
+            fallbackAddress = addr;
           }
         }
         if (selectedInterface != null && selectedAddress != null) break;
+      }
+
+      // Use fallback only if no preferred interface found
+      if (selectedInterface == null &&
+          fallbackInterface != null &&
+          fallbackAddress != null) {
+        selectedInterface = fallbackInterface;
+        selectedAddress = fallbackAddress;
       }
 
       if (selectedInterface != null && selectedAddress != null) {
@@ -110,7 +129,11 @@ class UdpDiscoveryService {
           '✅ Selected interface: ${selectedInterface.name} (${selectedAddress.address})',
         );
       } else {
-        print('⚠️ No suitable network interface found, using default');
+        print('❌ No suitable WiFi/Ethernet interface found');
+        _errorController.add(
+          'WiFi network required. Please connect to WiFi to use OG Messenger.',
+        );
+        return false;
       }
 
       // Acquire multicast lock on Android
@@ -130,15 +153,10 @@ class UdpDiscoveryService {
       final multicastAddress = InternetAddress(
         NetworkConstants.multicastAddress,
       );
-      if (selectedInterface != null) {
-        _udpSocket!.joinMulticast(multicastAddress, selectedInterface);
-        print(
-          '✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}',
-        );
-      } else {
-        _udpSocket!.joinMulticast(multicastAddress);
-        print('✅ Joined multicast group ${NetworkConstants.multicastAddress}');
-      }
+      _udpSocket!.joinMulticast(multicastAddress, selectedInterface);
+      print(
+        '✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}',
+      );
 
       // Configure multicast settings
       _udpSocket!.multicastLoopback = true; // Enable to help with debugging

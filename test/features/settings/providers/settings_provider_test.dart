@@ -179,6 +179,67 @@ void main() {
       });
     });
 
+    group('network connectivity', () {
+      test('has default connectivity state', () {
+        final state = container.read(settingsProvider);
+        
+        expect(state.isConnected, true);
+        expect(state.connectedNetworkId, 'Unknown');
+      });
+
+      test('updateNetworkStatus updates connectivity fields', () {
+        final notifier = container.read(settingsProvider.notifier);
+        
+        notifier.updateNetworkStatus(
+          networkId: '192.168.1.1',
+          isConnected: true,
+        );
+        
+        final state = container.read(settingsProvider);
+        expect(state.isConnected, true);
+        expect(state.networkId, '192.168.1.1');
+        expect(state.connectedNetworkId, '192.168.1.1');
+      });
+
+      test('updateNetworkStatus handles disconnection', () {
+        final notifier = container.read(settingsProvider.notifier);
+        
+        notifier.updateNetworkStatus(
+          networkId: 'Unknown',
+          isConnected: false,
+        );
+        
+        final state = container.read(settingsProvider);
+        expect(state.isConnected, false);
+        expect(state.networkId, 'Unknown');
+        expect(state.connectedNetworkId, 'Unknown');
+      });
+
+      test('updateNetworkStatus updates to different network', () {
+        final notifier = container.read(settingsProvider.notifier);
+        
+        // Set initial network
+        notifier.updateNetworkStatus(
+          networkId: '192.168.1.1',
+          isConnected: true,
+        );
+        
+        var state = container.read(settingsProvider);
+        expect(state.connectedNetworkId, '192.168.1.1');
+        
+        // Switch to different network
+        notifier.updateNetworkStatus(
+          networkId: '10.0.0.1',
+          isConnected: true,
+        );
+        
+        state = container.read(settingsProvider);
+        expect(state.isConnected, true);
+        expect(state.networkId, '10.0.0.1');
+        expect(state.connectedNetworkId, '10.0.0.1');
+      });
+    });
+
     group('first launch', () {
       test('marks setup as complete when username is set', () async {
         final notifier = container.read(settingsProvider.notifier);
