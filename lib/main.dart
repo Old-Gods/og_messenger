@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/setup/presentation/screens/setup_screen.dart';
 import 'features/chat/presentation/screens/chat_screen.dart';
+import 'features/chat/presentation/screens/sync_screen.dart';
 import 'features/settings/presentation/screens/settings_screen.dart';
 import 'features/settings/data/services/settings_service.dart';
 import 'features/settings/providers/settings_provider.dart';
@@ -86,6 +87,7 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
       initialRoute: '/setup',
       routes: {
         '/setup': (context) => const SetupScreen(),
+        '/sync': (context) => const SyncScreen(),
         '/chat': (context) => const ChatScreen(),
         '/settings': (context) => const SettingsScreen(),
       },

@@ -34,6 +34,11 @@ class MessageState {
   final int? syncProgress; // Last synced timestamp for resumption
   final List<String> syncFailedPeers; // Peers that failed to sync
   final bool isInitialSync; // True for first sync, false for background
+  final bool syncAckReceived; // True if peer acknowledged sync request
+  final int
+  syncExpectedMessages; // Number of messages expected in current sync batch
+  final int
+  syncReceivedMessages; // Number of messages received in current sync batch
 
   const MessageState({
     this.messages = const [],
@@ -52,6 +57,9 @@ class MessageState {
     this.syncProgress,
     this.syncFailedPeers = const [],
     this.isInitialSync = false,
+    this.syncAckReceived = false,
+    this.syncExpectedMessages = 0,
+    this.syncReceivedMessages = 0,
   });
 
   MessageState copyWith({
@@ -71,6 +79,9 @@ class MessageState {
     int? syncProgress,
     List<String>? syncFailedPeers,
     bool? isInitialSync,
+    bool? syncAckReceived,
+    int? syncExpectedMessages,
+    int? syncReceivedMessages,
   }) {
     return MessageState(
       messages: messages ?? this.messages,
@@ -89,6 +100,9 @@ class MessageState {
       syncProgress: syncProgress ?? this.syncProgress,
       syncFailedPeers: syncFailedPeers ?? this.syncFailedPeers,
       isInitialSync: isInitialSync ?? this.isInitialSync,
+      syncAckReceived: syncAckReceived ?? this.syncAckReceived,
+      syncExpectedMessages: syncExpectedMessages ?? this.syncExpectedMessages,
+      syncReceivedMessages: syncReceivedMessages ?? this.syncReceivedMessages,
     );
   }
 }
@@ -102,6 +116,10 @@ class MessageNotifier extends Notifier<MessageState> {
   bool _isAppInForeground = true;
   Timer? _typingCleanupTimer;
 
+  // Sync tracking
+  bool _isFirstPeerDiscovered = false;
+  final List<String> _peersToSync = [];
+
   @override
   MessageState build() {
     _repository = MessageRepository();
@@ -111,6 +129,7 @@ class MessageNotifier extends Notifier<MessageState> {
     _tcpServer.messageStream.listen(_handleIncomingMessage);
     _tcpServer.errorStream.listen(_handleError);
     _tcpServer.syncRequestStream.listen(_handleSyncRequest);
+    _tcpServer.syncReceivedStream.listen(_handleSyncReceived);
     _tcpServer.nameChangeStream.listen(_handleNameChange);
     _tcpServer.authRequestStream.listen(_handleAuthRequest);
     _tcpServer.typingIndicatorStream.listen(_handleTypingIndicator);
@@ -442,6 +461,14 @@ class MessageNotifier extends Notifier<MessageState> {
         print(
           '⚠️ Skipping duplicate message: "${message.content}" from ${message.senderName}',
         );
+
+        // Track sync progress even for duplicates
+        if (state.syncInProgress) {
+          state = state.copyWith(
+            syncReceivedMessages: state.syncReceivedMessages + 1,
+          );
+        }
+
         return;
       }
 
@@ -451,6 +478,13 @@ class MessageNotifier extends Notifier<MessageState> {
 
       // Save to database
       await _repository.saveMessage(message, deviceId, networkId);
+
+      // Track sync progress if sync is in progress
+      if (state.syncInProgress) {
+        state = state.copyWith(
+          syncReceivedMessages: state.syncReceivedMessages + 1,
+        );
+      }
 
       // Only update window if in live mode
       if (state.isInLiveMode) {
@@ -551,54 +585,264 @@ class MessageNotifier extends Notifier<MessageState> {
       // Skip if peer existed before
       if (oldPeers.containsKey(peerId)) continue;
 
-      print('🔄 New peer discovered: ${peer.deviceName}, requesting sync...');
-      _syncedPeers.add(peerId);
+      print('🔄 New peer discovered: ${peer.deviceName}');
 
-      // Request message sync from new peer
-      await _requestSync(peer.ipAddress, peer.tcpPort);
+      // Determine if this is initial or background sync
+      final isInitialSync = !_isFirstPeerDiscovered;
+      if (isInitialSync) {
+        _isFirstPeerDiscovered = true;
+      }
+
+      // Mark as syncing
+      _syncedPeers.add(peerId);
+      _peersToSync.add(peerId);
+
+      // Start sync based on mode
+      if (isInitialSync) {
+        print('📋 Initial sync mode - showing sync screen');
+        state = state.copyWith(
+          syncInProgress: true,
+          isInitialSync: true,
+          currentSyncPeer: peer.deviceName,
+        );
+        await _syncWithPeer(
+          peer.ipAddress,
+          peer.tcpPort,
+          peer.deviceName,
+          isBackground: false,
+        );
+      } else {
+        print('📋 Background sync mode');
+        state = state.copyWith(syncInProgress: true, isInitialSync: false);
+        await _syncWithPeer(
+          peer.ipAddress,
+          peer.tcpPort,
+          peer.deviceName,
+          isBackground: true,
+        );
+      }
     }
 
     // Remove synced peers that disconnected
     _syncedPeers.removeWhere((id) => !newPeers.containsKey(id));
   }
 
-  /// Request message sync from a peer
-  Future<void> _requestSync(String peerAddress, int peerPort) async {
+  /// Sync with a peer using paginated requests
+  Future<void> _syncWithPeer(
+    String peerAddress,
+    int peerPort,
+    String peerName, {
+    required bool isBackground,
+  }) async {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId;
 
       if (deviceId == null) return;
 
-      // Request sync with timestamp 0 to get all messages
-      // The receiver will send all their messages and we'll deduplicate
-      print('📊 Requesting full sync (all messages)');
-      if (state.messages.isNotEmpty) {
-        print(
-          '   Our messages: ${state.messages.map((m) => '${m.timestampMicros}: "${m.content}"').join(', ')}',
+      // Get our latest message timestamp, or request from timestamp - 5 messages
+      final latestTimestamp = await _repository.getLatestTimestamp(
+        settings.networkId,
+      );
+      int syncFromTimestamp = 0;
+
+      if (latestTimestamp != null && latestTimestamp > 0) {
+        // Get the 5th oldest message timestamp to provide overlap
+        final settings = ref.read(settingsProvider);
+        final recentMessages = await _repository.getInitialMessages(
+          deviceId,
+          settings.networkId,
+          5,
         );
+        if (recentMessages.isNotEmpty) {
+          syncFromTimestamp = recentMessages.first.timestampMicros;
+        }
       }
 
-      final sent = await _tcpServer.sendSyncRequest(
-        peerAddress,
-        peerPort,
-        deviceId,
-        0, // Request all messages
+      print(
+        '📊 Starting paginated sync with $peerName (from timestamp: $syncFromTimestamp)',
       );
 
-      if (sent) {
-        print('✅ Sync request sent to $peerAddress:$peerPort');
-      } else {
+      int messagesReceived = 0;
+      int batchCount = 0;
+      bool hasMore = true;
+      final List<String> failedBatches = [];
+
+      while (hasMore) {
+        batchCount++;
+        print('📦 Requesting batch $batchCount from $peerName...');
+
+        // Update sync progress
+        state = state.copyWith(
+          currentSyncPeer: peerName,
+          syncProgress: syncFromTimestamp,
+        );
+
+        // Send sync request with timeout
+        final syncRequestFuture = _tcpServer.sendSyncRequest(
+          peerAddress,
+          peerPort,
+          deviceId,
+          syncFromTimestamp,
+        );
+
+        bool sent;
+        try {
+          sent = await syncRequestFuture.timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              print('⏱️ Sync request batch $batchCount timed out');
+              return false;
+            },
+          );
+        } catch (e) {
+          print('❌ Sync request batch $batchCount failed: $e');
+          sent = false;
+        }
+
+        if (!sent) {
+          failedBatches.add('batch $batchCount');
+          print(
+            '⚠️ Failed to send sync request batch $batchCount to $peerName',
+          );
+          break; // Abandon this peer and move to next
+        }
+
+        // Wait for sync acknowledgment first (5 seconds)
+        print('⏳ Waiting for sync acknowledgment from $peerName...');
+        state = state.copyWith(
+          syncAckReceived: false,
+          syncExpectedMessages: 0,
+          syncReceivedMessages: 0,
+        );
+        await Future.delayed(const Duration(seconds: 5));
+
+        if (!state.syncAckReceived) {
+          print(
+            '⚠️ No sync acknowledgment received from $peerName within 5 seconds',
+          );
+          failedBatches.add('batch $batchCount (no ack)');
+          break;
+        }
+
+        // Now wait for messages to arrive, but check periodically if we've received all
+        final expectedCount = state.syncExpectedMessages;
         print(
-          '⚠️ Sync request to $peerAddress:$peerPort deferred (peer still starting)',
+          '⏳ Sync acknowledged, waiting for $expectedCount messages from $peerName...',
+        );
+
+        // Poll every 500ms for up to 30 seconds
+        bool allReceived = false;
+        for (int i = 0; i < 60; i++) {
+          await Future.delayed(const Duration(milliseconds: 500));
+
+          final receivedCount = state.syncReceivedMessages;
+          if (receivedCount >= expectedCount) {
+            print(
+              '✅ All $expectedCount messages received after ${(i + 1) * 500}ms',
+            );
+            allReceived = true;
+            break;
+          }
+
+          // Log progress every 2 seconds
+          if ((i + 1) % 4 == 0) {
+            print(
+              '📊 Sync progress: $receivedCount/$expectedCount messages received',
+            );
+          }
+        }
+
+        if (!allReceived) {
+          final receivedCount = state.syncReceivedMessages;
+          print(
+            '⚠️ Timeout: Only received $receivedCount/$expectedCount messages after 30 seconds',
+          );
+        }
+
+        hasMore = false; // Single batch for now
+
+        print('✅ Batch $batchCount completed');
+      }
+
+      // Sync completed
+      print(
+        '✅ Sync with $peerName completed ($batchCount batches, $messagesReceived messages)',
+      );
+
+      if (failedBatches.isEmpty) {
+        // Success
+        if (!isBackground) {
+          // Initial sync - navigate to chat screen will happen in UI
+          state = state.copyWith(
+            syncInProgress: false,
+            currentSyncPeer: null,
+            syncProgress: null,
+            syncAckReceived: false,
+            syncExpectedMessages: 0,
+            syncReceivedMessages: 0,
+          );
+        } else {
+          // Background sync - show snackbar
+          state = state.copyWith(
+            syncInProgress: false,
+            currentSyncPeer: null,
+            syncProgress: null,
+            syncAckReceived: false,
+            syncExpectedMessages: 0,
+            syncReceivedMessages: 0,
+          );
+          // Note: Snackbar will be shown in UI layer
+        }
+      } else {
+        // Partial failure
+        print('⚠️ Some sync batches failed: ${failedBatches.join(", ")}');
+        final updatedFailedPeers = [...state.syncFailedPeers, peerName];
+        state = state.copyWith(
+          syncInProgress: false,
+          currentSyncPeer: null,
+          syncProgress: null,
+          syncFailedPeers: updatedFailedPeers,
+          syncAckReceived: false,
+          syncExpectedMessages: 0,
+          syncReceivedMessages: 0,
         );
       }
     } catch (e) {
-      print('⚠️ Failed to request sync: $e');
+      print('❌ Failed to sync with $peerName: $e');
+      final updatedFailedPeers = [...state.syncFailedPeers, peerName];
+      state = state.copyWith(
+        syncInProgress: false,
+        currentSyncPeer: null,
+        syncProgress: null,
+        syncFailedPeers: updatedFailedPeers,
+        syncAckReceived: false,
+        syncExpectedMessages: 0,
+        syncReceivedMessages: 0,
+      );
     }
   }
 
-  /// Handle sync request from a peer
+  /// Handle sync received acknowledgment from a peer
+  void _handleSyncReceived(Map<String, dynamic> ack) {
+    try {
+      final peerAddress = ack['peer_address'] as String;
+      final messageCount = ack['message_count'] as int? ?? 0;
+
+      print(
+        '✅ Peer $peerAddress acknowledged sync request ($messageCount messages to receive)',
+      );
+
+      state = state.copyWith(
+        syncAckReceived: true,
+        syncExpectedMessages: messageCount,
+      );
+    } catch (e) {
+      print('❌ Failed to handle sync acknowledgment: $e');
+    }
+  }
+
+  /// Handle sync request from a peer (paginated)
   Future<void> _handleSyncRequest(Map<String, dynamic> request) async {
     try {
       final peerAddress = request['address'] as String;
@@ -606,31 +850,45 @@ class MessageNotifier extends Notifier<MessageState> {
       final sinceTimestamp = request['since_timestamp'] as int;
 
       print(
-        '🔄 Received sync request from $peerAddress:$peerPort (since: $sinceTimestamp)',
+        '🔄 Received paginated sync request from $peerAddress:$peerPort (since: $sinceTimestamp)',
       );
 
-      // Ensure messages are loaded
-      if (state.isLoading) {
-        print('⏳ Messages still loading, waiting...');
-        await loadMessages();
-      }
+      final settings = ref.read(settingsProvider);
+      final deviceId = settings.deviceId ?? '';
+      final networkId = settings.networkId;
 
-      print('📊 Current state has ${state.messages.length} messages');
-
-      // Get messages newer than the requested timestamp
-      final messagesToSync = state.messages
-          .where((m) => m.timestampMicros > sinceTimestamp)
-          .toList();
-
-      if (state.messages.isNotEmpty) {
-        print(
-          '   All message timestamps: ${state.messages.map((m) => m.timestampMicros).join(', ')}',
+      // Calculate overlap - get messages from (sinceTimestamp - 5 messages)
+      int fromTimestamp = sinceTimestamp;
+      if (sinceTimestamp > 0) {
+        // Get messages before the requested timestamp to create overlap
+        final overlapMessages = await _repository.getMessagesBeforeTimestamp(
+          deviceId,
+          networkId,
+          sinceTimestamp,
+          5,
         );
-        print('   Requested since: $sinceTimestamp');
-        print('   Messages to sync: ${messagesToSync.length}');
+        if (overlapMessages.isNotEmpty) {
+          fromTimestamp = overlapMessages.first.timestampMicros;
+          print(
+            '📊 Adjusted sync start with 5-message overlap: $fromTimestamp',
+          );
+        }
       }
 
-      print('📤 Sending ${messagesToSync.length} messages for sync');
+      // Get messages after fromTimestamp with limit of 100
+      final messagesToSync = await _repository
+          .getMessagesAfterTimestampPaginated(
+            deviceId,
+            networkId,
+            fromTimestamp,
+            100,
+          );
+
+      final hasMore = messagesToSync.length == 100;
+
+      print(
+        '📤 Sending ${messagesToSync.length} messages for sync (hasMore: $hasMore)',
+      );
 
       if (messagesToSync.isNotEmpty) {
         print(
@@ -638,13 +896,26 @@ class MessageNotifier extends Notifier<MessageState> {
         );
       }
 
+      // Send immediate acknowledgment so requester knows we received the sync request
+      await _tcpServer.sendSyncReceived(
+        peerAddress,
+        peerPort,
+        messagesToSync.length,
+      );
+
       // Send each message
       for (final message in messagesToSync) {
-        print('   Syncing: "${message.content}" (${message.timestampMicros})');
         await _tcpServer.sendMessage(peerAddress, peerPort, message);
       }
 
-      print('✅ Sync completed with $peerAddress:$peerPort');
+      // TODO: Send sync_response with hasMore flag
+      // In a full implementation, we'd send a sync_response message with:
+      // - hasMore: bool
+      // - messageCount: int
+      // - lastTimestamp: int
+      // For now, the peer will determine hasMore by checking if they received 100 messages
+
+      print('✅ Sync batch completed with $peerAddress:$peerPort');
     } catch (e) {
       print('❌ Failed to handle sync request: $e');
     }
@@ -669,7 +940,7 @@ class MessageNotifier extends Notifier<MessageState> {
       print('✅ Updated $updatedCount messages with new name');
 
       // Reload messages to reflect the change in UI
-      await loadMessages();
+      await loadInitialMessages();
     } catch (e) {
       print('❌ Failed to handle name change: $e');
     }

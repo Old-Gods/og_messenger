@@ -30,6 +30,8 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _typingIndicatorController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _syncReceivedController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -58,6 +60,10 @@ class TcpServerService {
   /// Stream of typing indicators
   Stream<Map<String, dynamic>> get typingIndicatorStream =>
       _typingIndicatorController.stream;
+
+  /// Stream of sync received acknowledgments
+  Stream<Map<String, dynamic>> get syncReceivedStream =>
+      _syncReceivedController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -186,6 +192,16 @@ class TcpServerService {
           'address': socket.remoteAddress.address,
           'port': json['tcp_port'] as int,
           'since_timestamp': json['since_timestamp'] as int,
+        });
+        return;
+      }
+
+      // Check if this is a sync received acknowledgment
+      if (json['type'] == 'sync_received') {
+        print('✅ Received sync acknowledgment');
+        _syncReceivedController.add({
+          'peer_address': socket.remoteAddress.address,
+          'message_count': json['message_count'] as int?,
         });
         return;
       }
@@ -360,6 +376,34 @@ class TcpServerService {
       print(
         '⚠️ Sync request to $peerAddress:$peerPort failed (peer may still be starting up): $e',
       );
+      return false;
+    }
+  }
+
+  /// Send a sync received acknowledgment to a peer
+  Future<bool> sendSyncReceived(
+    String peerAddress,
+    int peerPort,
+    int messageCount,
+  ) async {
+    try {
+      final acknowledgment = {
+        'type': 'sync_received',
+        'message_count': messageCount,
+      };
+
+      final ackJson = jsonEncode(acknowledgment);
+      print('📤 Sending sync acknowledgment to $peerAddress:$peerPort (messages: $messageCount)');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$ackJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Sync acknowledgment sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send sync acknowledgment to $peerAddress:$peerPort: $e');
       return false;
     }
   }

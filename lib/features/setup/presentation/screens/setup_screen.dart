@@ -642,17 +642,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         .read(settingsProvider.notifier)
         .setUserName(_nameController.text.trim(), skipBroadcast: true);
 
-    print('🔧 Username saved, navigating to chat...');
+    print('🔧 Username saved, navigating to sync screen...');
 
-    // Navigate to chat screen after setup is complete
+    // Navigate to sync screen after setup is complete
+    // Sync screen will handle peer discovery and sync, then navigate to chat
     if (mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          print('🚀 Navigating to /chat');
+          print('🚀 Navigating to /sync');
           Navigator.of(
             context,
             rootNavigator: true,
-          ).pushReplacementNamed('/chat');
+          ).pushReplacementNamed('/sync');
         }
       });
     }
