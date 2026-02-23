@@ -152,7 +152,7 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.meeting_room, size: 64, color: Colors.grey),
+            _EmptyStateIcon(),
             SizedBox(height: 16),
             Text(
               'No rooms available',
@@ -460,6 +460,21 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
         behavior: SnackBarBehavior.floating,
         margin: EdgeInsets.only(top: 80, left: 16, right: 16),
       ),
+    );
+  }
+}
+
+/// Widget for empty state icon that switches based on theme
+class _EmptyStateIcon extends StatelessWidget {
+  const _EmptyStateIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      Theme.of(context).brightness == Brightness.dark
+          ? 'images/og_messenger.dark.png'
+          : 'images/og_messenger.png',
+      width: 64,
     );
   }
 }
