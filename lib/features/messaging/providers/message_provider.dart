@@ -447,8 +447,34 @@ class MessageNotifier extends Notifier<MessageState> {
         );
       }
 
+      // Check if message belongs to active room
+      final isActiveRoom = messageRoomId == activeRoomId;
+
+      // Show notification if:
+      // - NOT during sync (synced messages shouldn't trigger notifications)
+      // - AND (app is in background OR message is for different room)
+      if (!state.syncInProgress && (!_isAppInForeground || !isActiveRoom)) {
+        try {
+          await NotificationService.instance.showMessageNotification(
+            senderName: message.senderName,
+            messageContent: message.content,
+            messageId: message.uuid,
+            roomId: messageRoomId,
+          );
+          print('🔔 Notification shown for message from ${message.senderName}');
+        } catch (e) {
+          print('⚠️ Failed to show notification: $e');
+        }
+      } else if (state.syncInProgress) {
+        print('📥 Sync in progress, skipping notification');
+      } else {
+        print(
+          '📱 App in foreground and viewing active room, skipping notification',
+        );
+      }
+
       // Only process for UI if message belongs to active room
-      if (messageRoomId != activeRoomId) {
+      if (!isActiveRoom) {
         print(
           '📦 Message for different room ($messageRoomId), saved but not displaying (active: $activeRoomId)',
         );
@@ -527,23 +553,6 @@ class MessageNotifier extends Notifier<MessageState> {
         print(
           '📥 Message saved to database (not in live mode, skipping window update)',
         );
-      }
-
-      // Show notification only if app is in background
-      if (!_isAppInForeground) {
-        try {
-          await NotificationService.instance.showMessageNotification(
-            senderName: message.senderName,
-            messageContent: message.content,
-            messageId: message.uuid,
-            roomId: message.roomId ?? 'default_room',
-          );
-          print('🔔 Notification shown for message from ${message.senderName}');
-        } catch (e) {
-          print('⚠️ Failed to show notification: $e');
-        }
-      } else {
-        print('📱 App in foreground, skipping notification');
       }
     } catch (e) {
       print('❌ Failed to save message: $e');
