@@ -275,12 +275,15 @@ class RoomNotifier extends Notifier<RoomState> {
 
       state = state.copyWith(pendingRequests: updatedPendingRequests);
 
-      // Show notification
-      NotificationService.instance.showJoinRequestNotification(
-        requesterName: requesterName,
-        roomName: roomName,
-        requestId: requestId,
-      );
+      // Show notification only if user is NOT currently viewing this room
+      // (if they're in the room, they'll see the in-app dialog instead)
+      if (state.activeRoomId != roomId) {
+        NotificationService.instance.showJoinRequestNotification(
+          requesterName: requesterName,
+          roomName: roomName,
+          requestId: requestId,
+        );
+      }
 
       print('✅ Join request stored: $requestId');
     } catch (e) {

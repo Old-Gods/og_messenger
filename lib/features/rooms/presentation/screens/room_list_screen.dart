@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/room_provider.dart';
 import '../../domain/entities/room.dart';
-import '../../domain/entities/join_request.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
 
@@ -123,11 +122,6 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Create Room'),
       ),
-      bottomSheet: roomState.pendingRequests.isNotEmpty
-          ? _buildPendingRequestsSheet(
-              roomState.pendingRequests.values.toList(),
-            )
-          : null,
     );
   }
 
@@ -243,80 +237,6 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
     Navigator.pushNamed(context, '/chat');
   }
 
-  /// Build bottom sheet for pending join requests
-  Widget _buildPendingRequestsSheet(List<JoinRequest> requests) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Icon(Icons.notification_important, color: Colors.orange),
-                const SizedBox(width: 8),
-                Text(
-                  'Pending Join Requests (${requests.length})',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              itemCount: requests.length,
-              itemBuilder: (context, index) {
-                final request = requests[index];
-                return _buildJoinRequestCard(request);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build card for join request
-  Widget _buildJoinRequestCard(JoinRequest request) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person_add)),
-        title: Text(request.requesterName),
-        subtitle: Text('Wants to join ${request.roomName}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.check, color: Colors.green),
-              onPressed: () => _acceptJoinRequest(request.requestId),
-              tooltip: 'Accept',
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.red),
-              onPressed: () => _rejectJoinRequest(request.requestId),
-              tooltip: 'Reject',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Show create room dialog
   void _showCreateRoomDialog() {
     final controller = TextEditingController();
@@ -429,30 +349,6 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
             child: const Text('Leave'),
           ),
         ],
-      ),
-    );
-  }
-
-  /// Accept join request
-  void _acceptJoinRequest(String requestId) {
-    ref.read(roomProvider.notifier).acceptJoinRequest(requestId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Join request accepted'),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
-      ),
-    );
-  }
-
-  /// Reject join request
-  void _rejectJoinRequest(String requestId) {
-    ref.read(roomProvider.notifier).rejectJoinRequest(requestId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Join request rejected'),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
       ),
     );
   }
