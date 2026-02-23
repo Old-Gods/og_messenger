@@ -37,6 +37,8 @@ flutter:
   assets:
     - images/og_messenger.png
     - images/og_messenger.dark.png
+    - images/og_messenger_icon.png
+    - images/og_messenger_icon.dark.png
 flutter_launcher_icons:
   android: true
   ios: true

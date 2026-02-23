@@ -70,13 +70,17 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
     return MaterialApp(
       title: 'OG Messenger',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          surface: Colors.white,
+        ),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
           brightness: Brightness.dark,
+          surface: Colors.black,
         ),
         useMaterial3: true,
       ),
