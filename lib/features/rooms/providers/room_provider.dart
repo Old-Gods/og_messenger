@@ -57,6 +57,7 @@ class RoomState {
 class RoomNotifier extends Notifier<RoomState> {
   StreamSubscription? _joinRequestSubscription;
   StreamSubscription? _joinResponseSubscription;
+  StreamSubscription? _requestResolvedSubscription;
 
   @override
   RoomState build() {
@@ -68,10 +69,17 @@ class RoomNotifier extends Notifier<RoomState> {
     _joinResponseSubscription = TcpServerService.instance.joinResponseStream
         .listen(_handleJoinResponse);
 
+    // Listen to request resolved notifications
+    _requestResolvedSubscription = TcpServerService
+        .instance
+        .requestResolvedStream
+        .listen(_handleRequestResolved);
+
     // Clean up subscriptions when provider is disposed
     ref.onDispose(() {
       _joinRequestSubscription?.cancel();
       _joinResponseSubscription?.cancel();
+      _requestResolvedSubscription?.cancel();
     });
 
     // Load joined rooms and pending requests from database after build completes
@@ -177,8 +185,7 @@ class RoomNotifier extends Notifier<RoomState> {
         return;
       }
 
-      // Send join request to first online member
-      final targetPeer = onlineMembers.first;
+      // Send join request to ALL online members
       final settings = ref.read(settingsProvider);
       final securityService = SecurityService.instance;
 
@@ -195,20 +202,24 @@ class RoomNotifier extends Notifier<RoomState> {
         createdAt: DateTime.now(),
       );
 
-      // Send request via TCP
-      final success = await TcpServerService.instance.sendJoinRequest(
-        peerAddress: targetPeer.ipAddress,
-        peerPort: targetPeer.tcpPort,
-        requestId: requestId,
-        roomId: roomId,
-        roomName: room.roomName,
-        requesterDeviceId: settings.deviceId!,
-        requesterName: settings.userName!,
-        requesterPublicKey: securityService.publicKeyPem!,
-        tcpPort: TcpServerService.instance.actualPort!,
-      );
+      // Send request to ALL online members
+      int successCount = 0;
+      for (final targetPeer in onlineMembers) {
+        final success = await TcpServerService.instance.sendJoinRequest(
+          peerAddress: targetPeer.ipAddress,
+          peerPort: targetPeer.tcpPort,
+          requestId: requestId,
+          roomId: roomId,
+          roomName: room.roomName,
+          requesterDeviceId: settings.deviceId!,
+          requesterName: settings.userName!,
+          requesterPublicKey: securityService.publicKeyPem!,
+          tcpPort: TcpServerService.instance.actualPort!,
+        );
+        if (success) successCount++;
+      }
 
-      if (success) {
+      if (successCount > 0) {
         // Add to outgoing requests
         final updatedOutgoingRequests = Map<String, JoinRequest>.from(
           state.outgoingRequests,
@@ -220,10 +231,10 @@ class RoomNotifier extends Notifier<RoomState> {
           isLoading: false,
         );
 
-        print('✅ Join request sent: $requestId');
+        print('✅ Join request sent to $successCount member(s): $requestId');
       } else {
         state = state.copyWith(
-          error: 'Failed to send join request',
+          error: 'Failed to send join request to any members',
           isLoading: false,
         );
       }
@@ -250,6 +261,28 @@ class RoomNotifier extends Notifier<RoomState> {
       // Check if we're a member of this room
       if (!state.joinedRooms.containsKey(roomId)) {
         print('⚠️ Ignoring join request for room we are not a member of');
+        return;
+      }
+
+      // Check for duplicate requests from same user for same room
+      final existingRequest = state.pendingRequests.values.firstWhere(
+        (req) =>
+            req.requesterDeviceId == requesterDeviceId && req.roomId == roomId,
+        orElse: () => JoinRequest(
+          requestId: '',
+          roomId: '',
+          roomName: '',
+          requesterDeviceId: '',
+          requesterName: '',
+          requesterPublicKey: '',
+          createdAt: DateTime.now(),
+        ),
+      );
+
+      if (existingRequest.requestId.isNotEmpty) {
+        print(
+          '⚠️ Ignoring duplicate join request from $requesterName for room $roomId',
+        );
         return;
       }
 
@@ -342,6 +375,9 @@ class RoomNotifier extends Notifier<RoomState> {
         encryptedAesKey: encryptedAesKey,
       );
 
+      // Notify all other room members to dismiss this request
+      await _notifyRequestResolved(requestId, request.roomId);
+
       // Remove from pending requests
       await DatabaseService.instance.deleteJoinRequest(requestId);
       final updatedPendingRequests = Map<String, JoinRequest>.from(
@@ -382,6 +418,9 @@ class RoomNotifier extends Notifier<RoomState> {
           message: 'Join request rejected',
         );
       }
+
+      // Notify all other room members to dismiss this request
+      await _notifyRequestResolved(requestId, request.roomId);
 
       // Remove from pending requests
       await DatabaseService.instance.deleteJoinRequest(requestId);
@@ -496,6 +535,63 @@ class RoomNotifier extends Notifier<RoomState> {
         error: 'Failed to leave room: $e',
         isLoading: false,
       );
+    }
+  }
+
+  /// Notify all other room members to dismiss a resolved join request
+  Future<void> _notifyRequestResolved(String requestId, String roomId) async {
+    try {
+      // Get all online peers who are members of this room
+      final discoveryState = ref.read(discoveryProvider);
+      final onlineMembers = discoveryState.peers.values
+          .where((peer) => peer.rooms.any((r) => r.roomId == roomId))
+          .toList();
+
+      // Send notification to all online members
+      for (final peer in onlineMembers) {
+        await TcpServerService.instance.sendRequestResolved(
+          peerAddress: peer.ipAddress,
+          peerPort: peer.tcpPort,
+          requestId: requestId,
+          roomId: roomId,
+        );
+      }
+
+      print(
+        '📤 Notified ${onlineMembers.length} members that request $requestId was resolved',
+      );
+    } catch (e) {
+      print('⚠️ Error notifying request resolved: $e');
+    }
+  }
+
+  /// Handle incoming request_resolved message
+  void _handleRequestResolved(Map<String, dynamic> data) {
+    try {
+      final requestId = data['request_id'] as String?;
+      final roomId = data['room_id'] as String?;
+
+      if (requestId == null || roomId == null) {
+        print('⚠️ Invalid request_resolved data: missing fields');
+        return;
+      }
+
+      // Remove from pending requests if present
+      if (state.pendingRequests.containsKey(requestId)) {
+        final updatedPendingRequests = Map<String, JoinRequest>.from(
+          state.pendingRequests,
+        );
+        updatedPendingRequests.remove(requestId);
+
+        state = state.copyWith(pendingRequests: updatedPendingRequests);
+
+        // Delete from database
+        DatabaseService.instance.deleteJoinRequest(requestId);
+
+        print('✅ Dismissed resolved join request: $requestId');
+      }
+    } catch (e) {
+      print('⚠️ Error handling request_resolved: $e');
     }
   }
 }

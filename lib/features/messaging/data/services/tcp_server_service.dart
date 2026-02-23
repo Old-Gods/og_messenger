@@ -33,6 +33,8 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _syncReceivedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _requestResolvedController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -65,6 +67,10 @@ class TcpServerService {
   /// Stream of sync received acknowledgments
   Stream<Map<String, dynamic>> get syncReceivedStream =>
       _syncReceivedController.stream;
+
+  /// Stream of request resolved notifications
+  Stream<Map<String, dynamic>> get requestResolvedStream =>
+      _requestResolvedController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -244,6 +250,16 @@ class TcpServerService {
           'creator_name': json['creator_name'] as String?,
           'encrypted_aes_key': json['encrypted_aes_key'] as String?,
           'message': json['message'] as String?,
+        });
+        return;
+      }
+
+      // Check if this is a request resolved notification
+      if (json['type'] == 'request_resolved') {
+        print('📥 Received request resolved notification');
+        _requestResolvedController.add({
+          'request_id': json['request_id'] as String,
+          'room_id': json['room_id'] as String,
         });
         return;
       }
@@ -647,6 +663,35 @@ class TcpServerService {
     } catch (e) {
       print('❌ Failed to send join response to $peerAddress:$peerPort: $e');
       _errorController.add('Failed to send join response: $e');
+      return false;
+    }
+  }
+
+  /// Send request resolved notification to a peer
+  Future<bool> sendRequestResolved({
+    required String peerAddress,
+    required int peerPort,
+    required String requestId,
+    required String roomId,
+  }) async {
+    try {
+      final notification = {
+        'type': 'request_resolved',
+        'request_id': requestId,
+        'room_id': roomId,
+      };
+
+      final notificationJson = jsonEncode(notification);
+      print('📤 Sending request resolved to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$notificationJson\n');
+      await socket.flush();
+      await socket.close();
+
+      return true;
+    } catch (e) {
+      print('❌ Failed to send request resolved to $peerAddress:$peerPort: $e');
       return false;
     }
   }

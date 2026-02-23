@@ -115,25 +115,3 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
     );
   }
 }
-
-/// Router widget that handles navigation after username is set
-/// (Kept for reference but no longer used)
-class _AppRouter extends StatelessWidget {
-  const _AppRouter();
-
-  @override
-  Widget build(BuildContext context) {
-    return Navigator(
-      onGenerateRoute: (settings) {
-        switch (settings.name) {
-          case '/chat':
-            return MaterialPageRoute(builder: (_) => const ChatScreen());
-          case '/settings':
-            return MaterialPageRoute(builder: (_) => const SettingsScreen());
-          default:
-            return MaterialPageRoute(builder: (_) => const RoomListScreen());
-        }
-      },
-    );
-  }
-}
