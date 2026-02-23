@@ -354,38 +354,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     showDialog(
       context: context,
       barrierDismissible: false, // User must choose
-      builder: (context) => AlertDialog(
-        title: const Text('Join Request'),
-        content: Text('${request.requesterName} wants to join this room.'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref
-                  .read(roomProvider.notifier)
-                  .rejectJoinRequest(request.requestId);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reject'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref
-                  .read(roomProvider.notifier)
-                  .acceptJoinRequest(request.requestId);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${request.requesterName} has joined the room'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Accept'),
-          ),
-        ],
+      builder: (dialogContext) => Consumer(
+        builder: (context, ref, child) {
+          // Watch for changes to pending requests
+          final roomState = ref.watch(roomProvider);
+
+          // If request is no longer in pending requests, close dialog
+          if (!roomState.pendingRequests.containsKey(request.requestId)) {
+            // Close dialog after current frame
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (Navigator.canPop(dialogContext)) {
+                Navigator.pop(dialogContext);
+              }
+            });
+            return const SizedBox.shrink();
+          }
+
+          return AlertDialog(
+            title: const Text('Join Request'),
+            content: Text('${request.requesterName} wants to join this room.'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  ref
+                      .read(roomProvider.notifier)
+                      .rejectJoinRequest(request.requestId);
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Reject'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  ref
+                      .read(roomProvider.notifier)
+                      .acceptJoinRequest(request.requestId);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${request.requesterName} has joined the room',
+                      ),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text('Accept'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
