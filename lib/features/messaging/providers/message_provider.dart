@@ -139,8 +139,11 @@ class MessageNotifier extends Notifier<MessageState> {
 
     // Listen to active room changes - reload messages when room changes
     ref.listen(roomProvider, (previous, next) {
-      if (previous?.activeRoomId != next.activeRoomId && next.activeRoomId != null) {
-        print('🔄 Active room changed, reloading messages for room: ${next.activeRoomId}');
+      if (previous?.activeRoomId != next.activeRoomId &&
+          next.activeRoomId != null) {
+        print(
+          '🔄 Active room changed, reloading messages for room: ${next.activeRoomId}',
+        );
         Future.microtask(() => loadInitialMessages());
       }
     });
@@ -626,9 +629,7 @@ class MessageNotifier extends Notifier<MessageState> {
       // Get our latest message timestamp, or request from timestamp - 5 messages
       final roomState = ref.read(roomProvider);
       final networkId = roomState.activeRoomId ?? 'default_room';
-      final latestTimestamp = await _repository.getLatestTimestamp(
-        networkId,
-      );
+      final latestTimestamp = await _repository.getLatestTimestamp(networkId);
       int syncFromTimestamp = 0;
 
       if (latestTimestamp != null && latestTimestamp > 0) {
@@ -890,7 +891,7 @@ class MessageNotifier extends Notifier<MessageState> {
 
       // Send each message
       for (final message in messagesToSync) {
-        await _tcpServer.sendMessage(peerAddress, peerPort, message);
+        await _tcpServer.sendMessage(peerAddress, peerPort, message, networkId);
       }
 
       // TODO: Send sync_response with hasMore flag
@@ -1066,7 +1067,12 @@ class MessageNotifier extends Notifier<MessageState> {
         print(
           '   Sending to ${peer.deviceName} at ${peer.ipAddress}:${peer.tcpPort}',
         );
-        await _tcpServer.sendMessage(peer.ipAddress, peer.tcpPort, message);
+        await _tcpServer.sendMessage(
+          peer.ipAddress,
+          peer.tcpPort,
+          message,
+          networkId,
+        );
       }
     } catch (e) {
       print('❌ Error sending message: $e');

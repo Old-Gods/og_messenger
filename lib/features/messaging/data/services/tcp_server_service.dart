@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../messaging/domain/entities/message.dart';
+import '../../../security/data/services/security_service.dart';
+import '../../../rooms/data/services/room_service.dart';
 
 /// TCP server for receiving messages from peers
 class TcpServerService {
@@ -258,29 +260,31 @@ class TcpServerService {
       // Otherwise, it's a regular message
       final parsedMessage = Message.fromJson(json);
 
-      // TODO: Decrypt message if we have room key
-      // Will be implemented after room-based architecture is complete
-      // final securityService = SecurityService.instance;
+      // Decrypt message if it has a room_id and we have the key
+      final securityService = SecurityService.instance;
       Message finalMessage = parsedMessage;
 
-      // if (securityService.hasRoomKey(roomId)) {
-      //   try {
-      //     final decryptedContent = securityService.decryptMessageForRoom(
-      //       parsedMessage.content,
-      //       roomId,
-      //     );
-      //     finalMessage = Message(
-      //       uuid: parsedMessage.uuid,
-      //       timestampMicros: parsedMessage.timestampMicros,
-      //       senderId: parsedMessage.senderId,
-      //       senderName: parsedMessage.senderName,
-      //       content: decryptedContent,
-      //       isOutgoing: parsedMessage.isOutgoing,
-      //     );
-      //   } catch (e) {
-      //     print('⚠️ Failed to decrypt message: $e');
-      //   }
-      // }
+      final messageRoomId = json['room_id'] as String?;
+      if (messageRoomId != null &&
+          RoomService.instance.getRoomAesKey(messageRoomId) != null) {
+        try {
+          final decryptedContent = securityService.decryptMessageForRoom(
+            parsedMessage.content,
+            messageRoomId,
+          );
+          finalMessage = Message(
+            uuid: parsedMessage.uuid,
+            timestampMicros: parsedMessage.timestampMicros,
+            senderId: parsedMessage.senderId,
+            senderName: parsedMessage.senderName,
+            content: decryptedContent,
+            isOutgoing: parsedMessage.isOutgoing,
+          );
+          print('🔓 Decrypted message for room: $messageRoomId');
+        } catch (e) {
+          print('⚠️ Failed to decrypt message: $e');
+        }
+      }
 
       print(
         '📨 Received message from ${finalMessage.senderName}: ${finalMessage.content}',
@@ -298,33 +302,39 @@ class TcpServerService {
     String peerAddress,
     int peerPort,
     Message message,
+    String? roomId,
   ) async {
     try {
-      // TODO: Encrypt message if we have room key
-      // Will be implemented after room-based architecture is complete
-      // final securityService = SecurityService.instance;
+      // Encrypt message if we have room key
+      final securityService = SecurityService.instance;
       Message messageToSend = message;
 
-      // if (securityService.hasRoomKey(roomId)) {
-      //   try {
-      //     final encryptedContent = securityService.encryptMessageForRoom(
-      //       message.content,
-      //       roomId,
-      //     );
-      //     messageToSend = Message(
-      //       uuid: message.uuid,
-      //       timestampMicros: message.timestampMicros,
-      //       senderId: message.senderId,
-      //       senderName: message.senderName,
-      //       content: encryptedContent,
-      //       isOutgoing: message.isOutgoing,
-      //     );
-      //   } catch (e) {
-      //     print('⚠️ Failed to encrypt message: $e');
-      //   }
-      // }
+      if (roomId != null &&
+          RoomService.instance.getRoomAesKey(roomId) != null) {
+        try {
+          final encryptedContent = securityService.encryptMessageForRoom(
+            message.content,
+            roomId,
+          );
+          messageToSend = Message(
+            uuid: message.uuid,
+            timestampMicros: message.timestampMicros,
+            senderId: message.senderId,
+            senderName: message.senderName,
+            content: encryptedContent,
+            isOutgoing: message.isOutgoing,
+          );
+          print('🔐 Encrypted message for room: $roomId');
+        } catch (e) {
+          print('⚠️ Failed to encrypt message: $e');
+        }
+      }
 
-      final messageJson = jsonEncode(messageToSend.toJson());
+      final messageData = messageToSend.toJson();
+      if (roomId != null) {
+        messageData['room_id'] = roomId;
+      }
+      final messageJson = jsonEncode(messageData);
       final messageBytes = utf8.encode(messageJson);
 
       // Validate message size before sending
