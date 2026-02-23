@@ -40,8 +40,6 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
           const SnackBar(
             content: Text('Failed to start messaging server'),
             backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(top: 80, left: 16, right: 16),
           ),
         );
       }
@@ -297,25 +295,17 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   /// Create a new room
   void _createRoom(String roomName) {
     ref.read(roomProvider.notifier).createRoom(roomName);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Creating room "$roomName"...'),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Creating room "$roomName"...')));
   }
 
   /// Request to join a room
   void _requestJoinRoom(String roomId) {
     ref.read(roomProvider.notifier).requestJoinRoom(roomId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sending join request...'),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Sending join request...')));
   }
 
   /// Leave a room
@@ -337,13 +327,9 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
             onPressed: () {
               Navigator.pop(context);
               ref.read(roomProvider.notifier).leaveRoom(roomId);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Left room'),
-                  behavior: SnackBarBehavior.floating,
-                  margin: EdgeInsets.only(top: 80, left: 16, right: 16),
-                ),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Left room')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Leave'),
