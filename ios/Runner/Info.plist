@@ -26,6 +26,13 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_og-messenger._udp</string>
+			<string>_og-messenger._tcp</string>
+		</array>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>OG Messenger needs to discover and communicate with devices on your local network to enable serverless messaging.</string>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>
@@ -49,6 +56,11 @@
 		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>voip</string>
+			<string>processing</string>
+		</array>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
@@ -65,22 +77,6 @@
 			<string>UIInterfaceOrientationPortraitUpsideDown</string>
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
-		</array>
-		<key>NSLocalNetworkUsageDescription</key>
-		<string>OG Messenger needs to discover and communicate with devices on your local network to enable serverless messaging.</string>
-		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>OG Messenger needs location permission to detect the WiFi network name for network-specific messaging.</string>
-		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>OG Messenger needs location permission to detect the WiFi network name for network-specific messaging.</string>
-		<key>NSBonjourServices</key>
-		<array>
-			<string>_og-messenger._udp</string>
-			<string>_og-messenger._tcp</string>
-		</array>
-		<key>UIBackgroundModes</key>
-		<array>
-			<string>voip</string>
-			<string>processing</string>
 		</array>
 	</dict>
 </plist>
