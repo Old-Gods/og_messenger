@@ -27,13 +27,13 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
   Future<void> _initializeServices() async {
     if (_servicesInitialized) return;
-    
+
     print('🚀 Initializing services from RoomListScreen...');
-    
+
     // Start TCP server
     final messageNotifier = ref.read(messageProvider.notifier);
     final serverStarted = await messageNotifier.startServer();
-    
+
     if (!serverStarted) {
       print('❌ Failed to start TCP server');
       if (mounted) {
@@ -41,20 +41,22 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
           const SnackBar(
             content: Text('Failed to start messaging server'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(top: 80, left: 16, right: 16),
           ),
         );
       }
       return;
     }
-    
+
     final tcpPort = messageNotifier.serverPort;
     print('✅ TCP server started on port: $tcpPort');
-    
+
     // Start UDP discovery
     if (tcpPort != null) {
       final discoveryNotifier = ref.read(discoveryProvider.notifier);
       final discoveryStarted = await discoveryNotifier.start(tcpPort);
-      
+
       if (discoveryStarted) {
         print('✅ UDP discovery started');
         setState(() => _servicesInitialized = true);
@@ -86,9 +88,10 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
       _previousJoinedRoomsCount = roomState.joinedRooms.length;
       _isFirstLoad = false;
     }
-    
+
     // Show snackbar when a new room is joined (but not on first load)
-    if (!_isFirstLoad && roomState.joinedRooms.length > _previousJoinedRoomsCount) {
+    if (!_isFirstLoad &&
+        roomState.joinedRooms.length > _previousJoinedRoomsCount) {
       _previousJoinedRoomsCount = roomState.joinedRooms.length;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -121,7 +124,9 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
         label: const Text('Create Room'),
       ),
       bottomSheet: roomState.pendingRequests.isNotEmpty
-          ? _buildPendingRequestsSheet(roomState.pendingRequests.values.toList())
+          ? _buildPendingRequestsSheet(
+              roomState.pendingRequests.values.toList(),
+            )
           : null,
     );
   }
@@ -130,10 +135,10 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   Widget _buildRoomsList(RoomState roomState) {
     // Combine all rooms: joined rooms + available rooms
     final allRooms = <String, Room>{};
-    
+
     // Add joined rooms
     allRooms.addAll(roomState.joinedRooms);
-    
+
     // Add available rooms (from discovery)
     for (final room in roomState.availableRooms.values) {
       // Only add if not already in joined rooms
@@ -186,12 +191,15 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
   /// Build unified room card
   Widget _buildRoomCard(Room room, bool isMember, RoomState roomState) {
-    final hasPendingRequest = roomState.outgoingRequests.values
-        .any((req) => req.roomId == room.roomId);
+    final hasPendingRequest = roomState.outgoingRequests.values.any(
+      (req) => req.roomId == room.roomId,
+    );
 
     // Get online member count
     final discoveryNotifier = ref.read(discoveryProvider.notifier);
-    final onlineMembers = discoveryNotifier.getOnlineMembersForRoom(room.roomId);
+    final onlineMembers = discoveryNotifier.getOnlineMembersForRoom(
+      room.roomId,
+    );
     final memberCount = onlineMembers.length;
 
     return Card(
@@ -218,15 +226,15 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
                 tooltip: 'Enter room',
               )
             : hasPendingRequest
-                ? const Chip(
-                    label: Text('Pending', style: TextStyle(fontSize: 12)),
-                    backgroundColor: Colors.orange,
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.login),
-                    onPressed: () => _requestJoinRoom(room.roomId),
-                    tooltip: 'Request to join',
-                  ),
+            ? const Chip(
+                label: Text('Pending', style: TextStyle(fontSize: 12)),
+                backgroundColor: Colors.orange,
+              )
+            : IconButton(
+                icon: const Icon(Icons.login),
+                onPressed: () => _requestJoinRoom(room.roomId),
+                tooltip: 'Request to join',
+              ),
         onTap: isMember ? () => _enterRoom(room.roomId) : null,
         onLongPress: isMember ? () => _showRoomMenu(room) : null,
       ),
@@ -293,9 +301,7 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
-        leading: const CircleAvatar(
-          child: Icon(Icons.person_add),
-        ),
+        leading: const CircleAvatar(child: Icon(Icons.person_add)),
         title: Text(request.requesterName),
         subtitle: Text('Wants to join ${request.roomName}'),
         trailing: Row(
@@ -378,7 +384,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   void _createRoom(String roomName) {
     ref.read(roomProvider.notifier).createRoom(roomName);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Creating room "$roomName"...')),
+      SnackBar(
+        content: Text('Creating room "$roomName"...'),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
+      ),
     );
   }
 
@@ -386,7 +396,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   void _requestJoinRoom(String roomId) {
     ref.read(roomProvider.notifier).requestJoinRoom(roomId);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sending join request...')),
+      const SnackBar(
+        content: Text('Sending join request...'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
+      ),
     );
   }
 
@@ -410,12 +424,14 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
               Navigator.pop(context);
               ref.read(roomProvider.notifier).leaveRoom(roomId);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Left room')),
+                const SnackBar(
+                  content: Text('Left room'),
+                  behavior: SnackBarBehavior.floating,
+                  margin: EdgeInsets.only(top: 80, left: 16, right: 16),
+                ),
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Leave'),
           ),
         ],
@@ -427,7 +443,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   void _acceptJoinRequest(String requestId) {
     ref.read(roomProvider.notifier).acceptJoinRequest(requestId);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Join request accepted')),
+      const SnackBar(
+        content: Text('Join request accepted'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
+      ),
     );
   }
 
@@ -435,7 +455,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   void _rejectJoinRequest(String requestId) {
     ref.read(roomProvider.notifier).rejectJoinRequest(requestId);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Join request rejected')),
+      const SnackBar(
+        content: Text('Join request rejected'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(top: 80, left: 16, right: 16),
+      ),
     );
   }
 }

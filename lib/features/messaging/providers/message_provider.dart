@@ -695,6 +695,7 @@ class MessageNotifier extends Notifier<MessageState> {
           peerPort,
           deviceId,
           syncFromTimestamp,
+          networkId,
         );
 
         bool sent;
@@ -859,15 +860,18 @@ class MessageNotifier extends Notifier<MessageState> {
       final peerAddress = request['address'] as String;
       final peerPort = request['port'] as int;
       final sinceTimestamp = request['since_timestamp'] as int;
+      final requestedRoomId = request['room_id'] as String?;
 
       print(
-        '🔄 Received paginated sync request from $peerAddress:$peerPort (since: $sinceTimestamp)',
+        '🔄 Received paginated sync request from $peerAddress:$peerPort (since: $sinceTimestamp, room: $requestedRoomId)',
       );
 
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final roomState = ref.read(roomProvider);
-      final networkId = roomState.activeRoomId ?? 'default_room';
+      // Use the room_id from the request, or fall back to active room
+      final networkId =
+          requestedRoomId ??
+          (ref.read(roomProvider).activeRoomId ?? 'default_room');
 
       // Calculate overlap - get messages from (sinceTimestamp - 5 messages)
       int fromTimestamp = sinceTimestamp;

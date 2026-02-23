@@ -366,6 +366,7 @@ class TcpServerService {
     int peerPort,
     String deviceId,
     int sinceTimestamp,
+    String roomId,
   ) async {
     try {
       final request = {
@@ -373,6 +374,7 @@ class TcpServerService {
         'device_id': deviceId,
         'tcp_port': _actualPort,
         'since_timestamp': sinceTimestamp,
+        'room_id': roomId,
       };
 
       final requestJson = jsonEncode(request);

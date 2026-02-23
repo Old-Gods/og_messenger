@@ -115,6 +115,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             SnackBar(
               content: const Text('Failed to start messaging server'),
               backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
               action: SnackBarAction(
                 label: 'Dismiss',
                 textColor: Colors.white,
@@ -255,26 +257,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           children: [
             Text(
               activeRoom.roomName,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
               'Created by ${activeRoom.creatorName}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const Divider(height: 32),
             Text(
               'Online Members (${onlineMembers.length})',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             if (onlineMembers.isEmpty)
@@ -348,17 +341,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context); // Close dialog
               ref.read(roomProvider.notifier).leaveRoom(roomId);
-              Navigator.pop(context); // Return to room list
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Left room')),
-              );
+              Navigator.pushReplacementNamed(context, '/');
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Leave'),
           ),
         ],
@@ -431,13 +419,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              activeRoom?.roomName ?? 'No Room Selected',
+              activeRoom?.roomName ?? 'No Room',
               style: const TextStyle(fontSize: 18),
             ),
             if (activeRoom != null)
               Text(
                 'by ${activeRoom.creatorName} • ${onlineMembers.length} online',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
+                ),
               ),
           ],
         ),
@@ -516,9 +507,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          activeRoom == null
-                              ? 'No active room'
-                              : 'No messages yet',
+                          'No messages yet',
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.grey[600],
@@ -526,11 +515,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          activeRoom == null
-                              ? 'Select or create a room to start chatting'
-                              : onlineMembers.isEmpty
-                                  ? 'Waiting for members to come online...'
-                                  : 'Start a conversation!',
+                          onlineMembers.isEmpty
+                              ? 'Waiting for members to come online...'
+                              : 'Start a conversation!',
                           style: TextStyle(color: Colors.grey[500]),
                         ),
                       ],
@@ -623,13 +610,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   child: TextField(
                     controller: _messageController,
                     focusNode: _messageFocusNode,
-                    enabled: activeRoom != null,
-                    decoration: InputDecoration(
-                      hintText: activeRoom == null
-                          ? 'Select a room to send messages'
-                          : 'Type a message...',
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(
+                    enabled: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message...',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
                       ),
@@ -637,13 +622,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     maxLines: null,
                     textInputAction: TextInputAction.send,
                     onChanged: _onTextChanged,
-                    onSubmitted: activeRoom != null ? (_) => _sendMessage() : null,
+                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: activeRoom != null ? _sendMessage : null,
+                  onPressed: _sendMessage,
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ],

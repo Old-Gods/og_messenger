@@ -470,12 +470,10 @@ class RoomNotifier extends Notifier<RoomState> {
       final updatedJoinedRooms = Map<String, Room>.from(state.joinedRooms);
       updatedJoinedRooms.remove(roomId);
 
-      // Clear active room if it was this room
+      // Always clear active room when leaving - let user choose next room
       String? newActiveRoomId = state.activeRoomId;
       if (newActiveRoomId == roomId) {
-        newActiveRoomId = updatedJoinedRooms.isNotEmpty
-            ? updatedJoinedRooms.keys.first
-            : null;
+        newActiveRoomId = null;
       }
 
       state = state.copyWith(
