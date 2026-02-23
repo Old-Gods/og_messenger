@@ -22,6 +22,16 @@ test/
     │   │   └── repositories/
     │   │       └── message_repository_test.dart # Message repository tests
     │   └── providers/
+    ├── rooms/
+    │   ├── domain/
+    │   │   └── entities/
+    │   │       ├── room_test.dart               # Room entity tests
+    │   │       └── join_request_test.dart       # Join request entity tests
+    │   ├── data/
+    │   │   └── services/
+    │   │       └── room_service_test.dart       # Room service tests
+    │   └── providers/
+    │       └── room_provider_test.dart          # Room provider tests
     ├── discovery/
     │   └── domain/
     │       └── entities/
@@ -89,13 +99,38 @@ xdg-open coverage/html/index.html  # Linux
   - Equality based on device ID
   - Public key handling
 
+- **Room Tests** (`room_test.dart`)
+  - Constructor validation
+  - JSON serialization/deserialization
+  - copyWith functionality
+  - Equality based on room ID
+  - Display name formatting
+  - Member count handling
+
+- **Join Request Tests** (`join_request_test.dart`)
+  - Constructor validation
+  - JSON serialization/deserialization
+  - Equality based on request ID
+  - Public key storage
+  - Timestamp handling
+
 #### Constants
 - **App Constants** (`app_constants_test.dart`)
   - Validates app configuration values
   - Checks retention days ranges
   - Verifies database naming
 
-- **Network Constants** (`network_constants_test.dart`)
+- **Network Constants** (`networ
+
+#### Room Service
+- **RoomService Tests** (`room_service_test.dart`)
+  - Room creation with unique IDs
+  - AES key generation per room
+  - Room persistence in database
+  - Leaving rooms (complete cleanup)
+  - Retrieving joined rooms
+  - Message deletion on leave
+  - Membership managementk_constants_test.dart`)
   - Validates network configuration
   - Checks multicast settings
   - Verifies TCP/UDP port configuration
@@ -123,6 +158,17 @@ xdg-open coverage/html/index.html  # Linux
   - Message count validation
 
 ### 4. Provider Tests
+
+#### Room Provider
+- **RoomProvider Tests** (`room_provider_test.dart`)
+  - Initial state (empty rooms)
+  - Room creation and activation
+  - Switching between rooms
+  - Leaving rooms
+  - State persistence across restarts
+  - Available rooms from discovery
+  - Pending and outgoing join requests
+  - Error handling
 
 #### Settings Provider
 - **SettingsProvider Tests** (`settings_provider_test.dart`)
