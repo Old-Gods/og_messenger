@@ -79,17 +79,12 @@ class UdpDiscoveryService {
           print('   ${interface.name}: ${addr.address}');
 
           // Skip VPN tunnels and other virtual interfaces
-          if (interface.name.startsWith('utun') ||
-              interface.name.startsWith('ipsec') ||
-              interface.name.startsWith('tap') ||
-              interface.name.startsWith('tun')) {
+          if (_isVirtualInterface(interface)) {
             continue;
           }
 
           // Skip mobile data interfaces (Android)
-          if (interface.name.startsWith('rmnet') ||
-              interface.name.startsWith('v4-rmnet') ||
-              interface.name.startsWith('ccmni')) {
+          if (_isMobileDataInterface(interface)) {
             print('   ⏭️ Skipping mobile data interface: ${interface.name}');
             continue;
           }
@@ -97,13 +92,7 @@ class UdpDiscoveryService {
           // Prefer WiFi (en0, wlan0) or Ethernet (en1, eth0) interfaces
           // And prefer 192.168.x.x or 10.x.x.x networks (common LAN ranges)
           final ip = addr.address;
-          if ((interface.name == 'en0' ||
-                  interface.name == 'en1' ||
-                  interface.name == 'wlan0' ||
-                  interface.name == 'eth0') &&
-              (ip.startsWith('192.168.') ||
-                  ip.startsWith('10.') ||
-                  ip.startsWith('172.'))) {
+          if (_isWiFiOrEthernetInterface(interface) && _isLANIP(ip)) {
             selectedInterface = interface;
             selectedAddress = addr;
             break;
@@ -201,6 +190,35 @@ class UdpDiscoveryService {
       await stop();
       return false;
     }
+  }
+
+  /// Is VPN tunnels and other virtual interfaces
+  bool _isVirtualInterface(NetworkInterface interface) {
+    return interface.name.startsWith('utun') ||
+        interface.name.startsWith('ipsec') ||
+        interface.name.startsWith('tap') ||
+        interface.name.startsWith('tun');
+  }
+
+  /// Is mobile data interfaces (Android)
+  bool _isMobileDataInterface(NetworkInterface interface) {
+    return interface.name.startsWith('rmnet') ||
+        interface.name.startsWith('v4-rmnet') ||
+        interface.name.startsWith('ccmni');
+  }
+
+  /// Is mobile data interfaces (Android)
+  bool _isWiFiOrEthernetInterface(NetworkInterface interface) {
+    return interface.name == 'en0' ||
+        interface.name == 'en1' ||
+        interface.name == 'wlan0' ||
+        interface.name == 'eth0';
+  }
+
+  bool _isLANIP(String ip) {
+    return ip.startsWith('192.168.') ||
+        ip.startsWith('10.') ||
+        ip.startsWith('172.');
   }
 
   /// Broadcast discovery beacon
