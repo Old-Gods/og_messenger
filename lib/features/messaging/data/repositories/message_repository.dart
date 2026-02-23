@@ -174,6 +174,29 @@ class MessageRepository {
     await _database.deleteMessage(uuid, senderId);
   }
 
+  /// Check if a message exists by UUID and sender ID
+  Future<Message?> getMessageByUuid(
+    String uuid,
+    String senderId,
+    String roomId,
+  ) async {
+    try {
+      final schema = await _database.getMessageByUuid(uuid, senderId, roomId);
+      if (schema == null) return null;
+
+      return Message(
+        uuid: schema.uuid,
+        timestampMicros: schema.timestampMicros,
+        senderId: schema.senderId,
+        senderName: schema.senderName,
+        content: schema.content,
+        isOutgoing: false, // Not relevant for duplicate check
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Get total message count for a specific network
   Future<int> getMessageCount(String networkId) async {
     return await _database.getMessageCount(networkId);

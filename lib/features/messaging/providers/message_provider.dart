@@ -437,6 +437,42 @@ class MessageNotifier extends Notifier<MessageState> {
       final activeRoomId = roomState.activeRoomId ?? 'default_room';
       final messageRoomId = message.roomId ?? 'default_room';
 
+      // Check for duplicates FIRST - before any processing
+      // This prevents duplicate notifications and unnecessary database operations
+      final isDuplicateInMemory = state.messages.any(
+        (m) => m.uuid == message.uuid && m.senderId == message.senderId,
+      );
+
+      // Also check database to catch duplicates from other rooms
+      bool isDuplicateInDb = false;
+      try {
+        final existingMessages = await _repository.getMessageByUuid(
+          message.uuid,
+          message.senderId,
+          messageRoomId,
+        );
+        isDuplicateInDb = existingMessages != null;
+      } catch (e) {
+        // If database check fails, continue (might be unique constraint error during save)
+      }
+
+      final isDuplicate = isDuplicateInMemory || isDuplicateInDb;
+
+      if (isDuplicate) {
+        print(
+          '⚠️ Skipping duplicate message: "${message.content}" from ${message.senderName}',
+        );
+
+        // Track sync progress even for duplicates
+        if (state.syncInProgress) {
+          state = state.copyWith(
+            syncReceivedMessages: state.syncReceivedMessages + 1,
+          );
+        }
+
+        return;
+      }
+
       // Save to database with the message's actual room ID
       await _repository.saveMessage(message, deviceId, messageRoomId);
 
@@ -485,26 +521,6 @@ class MessageNotifier extends Notifier<MessageState> {
       final updated = Map<String, DateTime>.from(state.typingPeers);
       if (updated.remove(message.senderId) != null) {
         state = state.copyWith(typingPeers: updated);
-      }
-
-      // Check for duplicates (same UUID and sender)
-      final isDuplicate = state.messages.any(
-        (m) => m.uuid == message.uuid && m.senderId == message.senderId,
-      );
-
-      if (isDuplicate) {
-        print(
-          '⚠️ Skipping duplicate message: "${message.content}" from ${message.senderName}',
-        );
-
-        // Track sync progress even for duplicates
-        if (state.syncInProgress) {
-          state = state.copyWith(
-            syncReceivedMessages: state.syncReceivedMessages + 1,
-          );
-        }
-
-        return;
       }
 
       print(

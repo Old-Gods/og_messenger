@@ -265,6 +265,25 @@ class DatabaseService {
     );
   }
 
+  /// Get a message by UUID, sender ID, and room ID (for duplicate checking)
+  Future<MessageSchema?> getMessageByUuid(
+    String uuid,
+    String senderId,
+    String roomId,
+  ) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      MessageSchema.tableName,
+      where:
+          '${MessageSchema.columnUuid} = ? AND ${MessageSchema.columnSenderId} = ? AND ${MessageSchema.columnRoomId} = ?',
+      whereArgs: [uuid, senderId, roomId],
+      limit: 1,
+    );
+
+    if (maps.isEmpty) return null;
+    return MessageSchema.fromMap(maps.first);
+  }
+
   /// Get total message count for a specific room
   Future<int> getMessageCount(String roomId) async {
     final db = await database;
