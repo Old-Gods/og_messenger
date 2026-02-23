@@ -49,12 +49,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Network monitoring removed - will be redesigned for multi-room architecture
-  }
-
   void _scrollToBottom({bool animate = true}) {
     if (!_scrollController.hasClients) return;
 

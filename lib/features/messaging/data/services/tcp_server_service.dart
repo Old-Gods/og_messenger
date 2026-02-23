@@ -616,12 +616,12 @@ class TcpServerService {
         'type': 'join_response',
         'request_id': requestId,
         'success': success,
-        if (roomId != null) 'room_id': roomId,
-        if (roomName != null) 'room_name': roomName,
-        if (creatorName != null) 'creator_name': creatorName,
-        if (encryptedAesKey != null) 'encrypted_aes_key': encryptedAesKey,
-        if (message != null) 'message': message,
-      };
+        'room_id': roomId,
+        'room_name': roomName,
+        'creator_name': creatorName,
+        'encrypted_aes_key': encryptedAesKey,
+        'message': message,
+      }..removeWhere((key, value) => value == null);
 
       final responseJson = jsonEncode(response);
       print(
