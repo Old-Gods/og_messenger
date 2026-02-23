@@ -4,6 +4,7 @@ import '../../providers/room_provider.dart';
 import '../../domain/entities/room.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
+import '../../../../core/utils/dialog_utils.dart';
 
 /// Screen for managing rooms - available rooms and joined rooms
 class RoomListScreen extends ConsumerStatefulWidget {
@@ -310,32 +311,15 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
   /// Leave a room
   void _leaveRoom(String roomId) {
-    showDialog(
+    DialogUtils.showLeaveRoomDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Leave Room'),
-        content: const Text(
-          'Are you sure you want to leave this room? '
-          'All messages will be deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ref.read(roomProvider.notifier).leaveRoom(roomId);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Left room')));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
+      ref: ref,
+      roomId: roomId,
+      onLeave: () {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Left room')));
+      },
     );
   }
 }

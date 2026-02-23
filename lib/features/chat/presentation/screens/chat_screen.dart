@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/utils/color_utils.dart';
+import '../../../../core/utils/dialog_utils.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../messaging/providers/color_assignment_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -322,30 +323,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   /// Leave the current room
   void _leaveRoom(String roomId) {
-    showDialog(
+    DialogUtils.showLeaveRoomDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Leave Room'),
-        content: const Text(
-          'Are you sure you want to leave this room? '
-          'All messages will be deleted and you will return to the room list.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context); // Close dialog
-              ref.read(roomProvider.notifier).leaveRoom(roomId);
-              Navigator.pushReplacementNamed(context, '/');
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
+      ref: ref,
+      roomId: roomId,
+      onLeave: () => Navigator.pushReplacementNamed(context, '/'),
     );
   }
 
