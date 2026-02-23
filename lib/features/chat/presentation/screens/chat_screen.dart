@@ -494,10 +494,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Colors.grey[400],
+                        Image.asset(
+                          Theme.of(context).brightness == Brightness.dark
+                              ? 'images/og_messenger_no_messages.dark.png'
+                              : 'images/og_messenger_no_messages.png',
+                          width: 128,
                         ),
                         const SizedBox(height: 16),
                         Text(
