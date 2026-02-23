@@ -137,14 +137,18 @@ class MessageNotifier extends Notifier<MessageState> {
       _handlePeerChanges(previous?.peers ?? {}, next.peers);
     });
 
-    // Listen to active room changes - reload messages when room changes
+    // Listen to active room changes - reload messages and sync when room changes
     ref.listen(roomProvider, (previous, next) {
       if (previous?.activeRoomId != next.activeRoomId &&
           next.activeRoomId != null) {
         print(
           '🔄 Active room changed, reloading messages for room: ${next.activeRoomId}',
         );
-        Future.microtask(() => loadInitialMessages());
+        Future.microtask(() async {
+          await loadInitialMessages();
+          // Trigger sync with all connected peers for this new room
+          await _syncWithAllPeers();
+        });
       }
     });
 
@@ -553,6 +557,28 @@ class MessageNotifier extends Notifier<MessageState> {
 
     // Message is older than all existing messages
     return 0;
+  }
+
+  /// Sync with all currently connected peers
+  Future<void> _syncWithAllPeers() async {
+    final discoveryState = ref.read(discoveryProvider);
+    final peers = discoveryState.peers;
+
+    if (peers.isEmpty) {
+      print('📭 No peers available for sync');
+      return;
+    }
+
+    print('🔄 Syncing with ${peers.length} connected peers');
+
+    for (final peer in peers.values) {
+      await _syncWithPeer(
+        peer.ipAddress,
+        peer.tcpPort,
+        peer.deviceName,
+        isBackground: true,
+      );
+    }
   }
 
   /// Handle peer changes - sync with new peers
