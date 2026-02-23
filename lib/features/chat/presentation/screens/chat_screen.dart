@@ -27,6 +27,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   int _previousMessageCount = 0;
   DateTime? _lastTypingIndicatorSent;
   Timer? _typingThrottleTimer;
+  Set<String> _shownJoinRequests = {}; // Track which requests we've shown
 
   @override
   void initState() {
@@ -348,6 +349,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     );
   }
 
+  /// Show join request dialog
+  void _showJoinRequestDialog(dynamic request) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User must choose
+      builder: (context) => AlertDialog(
+        title: const Text('Join Request'),
+        content: Text('${request.requesterName} wants to join this room.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref
+                  .read(roomProvider.notifier)
+                  .rejectJoinRequest(request.requestId);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Reject'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref
+                  .read(roomProvider.notifier)
+                  .acceptJoinRequest(request.requestId);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${request.requesterName} has joined the room'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Accept'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _buildTypingIndicatorText() {
     final typingPeers = ref.watch(messageProvider).typingPeers;
     final discoveryState = ref.read(discoveryProvider);
@@ -395,6 +437,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final activeRoom = roomState.activeRoomId != null
         ? roomState.joinedRooms[roomState.activeRoomId]
         : null;
+
+    // Check for new join requests for the active room
+    if (activeRoom != null) {
+      for (final request in roomState.pendingRequests.values) {
+        if (request.roomId == activeRoom.roomId &&
+            !_shownJoinRequests.contains(request.requestId)) {
+          _shownJoinRequests.add(request.requestId);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showJoinRequestDialog(request);
+          });
+        }
+      }
+    }
 
     // Get online member count for active room
     final discoveryNotifier = ref.read(discoveryProvider.notifier);
