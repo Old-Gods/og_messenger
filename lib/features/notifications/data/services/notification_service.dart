@@ -184,10 +184,10 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
-    const androidDetails = AndroidNotificationDetails(
-      'messages',
-      'Messages',
-      channelDescription: 'New message notifications',
+    final androidDetails = AndroidNotificationDetails(
+      'room_$roomId',
+      'Room Messages',
+      channelDescription: 'Messages from room',
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,
@@ -242,7 +242,6 @@ class NotificationService {
   }
 
   /// Create a notification channel for a room (Android)
-  /// TODO: Implement per-room notification channels in Step 18
   Future<void> createRoomChannel(String roomId, String roomName) async {
     if (!_initialized) await initialize();
 
@@ -264,7 +263,6 @@ class NotificationService {
   }
 
   /// Delete a notification channel for a room (Android)
-  /// TODO: Implement per-room notification cleanup in Step 18
   Future<void> deleteRoomChannel(String roomId) async {
     if (Platform.isAndroid) {
       final androidImplementation = _plugin
