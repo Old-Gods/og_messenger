@@ -18,7 +18,6 @@ dependencies:
   json_annotation: ^4.11.0
   package_info_plus: ^9.0.0
   device_info_plus: ^12.3.0
-  network_info_plus: ^6.0.2
   connectivity_plus: ^6.0.0
   permission_handler: ^12.0.1
   crypto: ^3.0.5
@@ -37,6 +36,12 @@ flutter:
   assets:
     - images/og_messenger.png
     - images/og_messenger.dark.png
+    - images/og_messenger_icon.png
+    - images/og_messenger_icon.dark.png
+    - images/og_messenger_no_messages.png
+    - images/og_messenger_no_messages.dark.png
+    - images/og_messenger_rooms.png
+    - images/og_messenger_rooms.dark.png
 flutter_launcher_icons:
   android: true
   ios: true

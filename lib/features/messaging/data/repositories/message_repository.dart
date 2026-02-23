@@ -13,7 +13,7 @@ class MessageRepository {
   Future<void> saveMessage(
     Message message,
     String localDeviceId,
-    String networkId,
+    String roomId,
   ) async {
     final schema = MessageSchema(
       uuid: message.uuid,
@@ -21,7 +21,7 @@ class MessageRepository {
       senderId: message.senderId,
       senderName: message.senderName,
       content: message.content,
-      networkId: networkId,
+      roomId: roomId,
     );
 
     try {
@@ -172,6 +172,29 @@ class MessageRepository {
   /// Delete a specific message
   Future<void> deleteMessage(String uuid, String senderId) async {
     await _database.deleteMessage(uuid, senderId);
+  }
+
+  /// Check if a message exists by UUID and sender ID
+  Future<Message?> getMessageByUuid(
+    String uuid,
+    String senderId,
+    String roomId,
+  ) async {
+    try {
+      final schema = await _database.getMessageByUuid(uuid, senderId, roomId);
+      if (schema == null) return null;
+
+      return Message(
+        uuid: schema.uuid,
+        timestampMicros: schema.timestampMicros,
+        senderId: schema.senderId,
+        senderName: schema.senderName,
+        content: schema.content,
+        isOutgoing: false, // Not relevant for duplicate check
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   /// Get total message count for a specific network

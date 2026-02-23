@@ -58,6 +58,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Name updated successfully'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
             action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
@@ -67,6 +69,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update name: $e'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
             action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
@@ -122,6 +126,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Retention updated to $newDays days'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
             action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
@@ -157,6 +163,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('All messages cleared'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
             action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );

@@ -4,6 +4,8 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
+import '../../../rooms/domain/entities/room_info.dart';
+import '../../../rooms/data/services/room_service.dart';
 import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
@@ -77,17 +79,12 @@ class UdpDiscoveryService {
           print('   ${interface.name}: ${addr.address}');
 
           // Skip VPN tunnels and other virtual interfaces
-          if (interface.name.startsWith('utun') ||
-              interface.name.startsWith('ipsec') ||
-              interface.name.startsWith('tap') ||
-              interface.name.startsWith('tun')) {
+          if (_isVirtualInterface(interface)) {
             continue;
           }
 
           // Skip mobile data interfaces (Android)
-          if (interface.name.startsWith('rmnet') ||
-              interface.name.startsWith('v4-rmnet') ||
-              interface.name.startsWith('ccmni')) {
+          if (_isMobileDataInterface(interface)) {
             print('   ⏭️ Skipping mobile data interface: ${interface.name}');
             continue;
           }
@@ -95,13 +92,7 @@ class UdpDiscoveryService {
           // Prefer WiFi (en0, wlan0) or Ethernet (en1, eth0) interfaces
           // And prefer 192.168.x.x or 10.x.x.x networks (common LAN ranges)
           final ip = addr.address;
-          if ((interface.name == 'en0' ||
-                  interface.name == 'en1' ||
-                  interface.name == 'wlan0' ||
-                  interface.name == 'eth0') &&
-              (ip.startsWith('192.168.') ||
-                  ip.startsWith('10.') ||
-                  ip.startsWith('172.'))) {
+          if (_isWiFiOrEthernetInterface(interface) && _isLANIP(ip)) {
             selectedInterface = interface;
             selectedAddress = addr;
             break;
@@ -201,8 +192,37 @@ class UdpDiscoveryService {
     }
   }
 
+  /// Is VPN tunnels and other virtual interfaces
+  bool _isVirtualInterface(NetworkInterface interface) {
+    return interface.name.startsWith('utun') ||
+        interface.name.startsWith('ipsec') ||
+        interface.name.startsWith('tap') ||
+        interface.name.startsWith('tun');
+  }
+
+  /// Is mobile data interfaces (Android)
+  bool _isMobileDataInterface(NetworkInterface interface) {
+    return interface.name.startsWith('rmnet') ||
+        interface.name.startsWith('v4-rmnet') ||
+        interface.name.startsWith('ccmni');
+  }
+
+  /// Is mobile data interfaces (Android)
+  bool _isWiFiOrEthernetInterface(NetworkInterface interface) {
+    return interface.name == 'en0' ||
+        interface.name == 'en1' ||
+        interface.name == 'wlan0' ||
+        interface.name == 'eth0';
+  }
+
+  bool _isLANIP(String ip) {
+    return ip.startsWith('192.168.') ||
+        ip.startsWith('10.') ||
+        ip.startsWith('172.');
+  }
+
   /// Broadcast discovery beacon
-  void _broadcastBeacon() {
+  Future<void> _broadcastBeacon() async {
     if (!_isRunning ||
         _udpSocket == null ||
         _deviceId == null ||
@@ -213,15 +233,28 @@ class UdpDiscoveryService {
     }
 
     try {
+      final roomService = RoomService.instance;
       final securityService = SecurityService.instance;
+
+      // Get joined rooms for beacon
+      final joinedRooms = await roomService.getJoinedRooms();
+      final roomInfos = joinedRooms.map((room) {
+        return RoomInfo(
+          roomId: room.roomId,
+          roomName: room.roomName,
+          creatorName: room.creatorName,
+          isMember: true,
+        );
+      }).toList();
+
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
-        publicKey: securityService.publicKeyPem,
-        isAuthenticated: securityService.isAuthenticated,
+        publicKey: securityService.publicKeyPem!,
+        rooms: roomInfos,
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
@@ -259,7 +292,7 @@ class UdpDiscoveryService {
       if (peer.deviceId == _deviceId) return;
 
       print(
-        '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
+        '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort} with ${peer.rooms.length} room(s)',
       );
 
       // Update peer with actual IP address
@@ -270,7 +303,7 @@ class UdpDiscoveryService {
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
         publicKey: peer.publicKey,
-        isAuthenticated: peer.isAuthenticated,
+        rooms: peer.rooms,
       );
 
       // Add or update peer

@@ -1,3 +1,5 @@
+import 'package:og_messenger/features/rooms/domain/entities/room_info.dart';
+
 /// Represents a peer device on the network
 class Peer {
   final String deviceId;
@@ -5,8 +7,8 @@ class Peer {
   final String ipAddress;
   final int tcpPort;
   final DateTime lastSeen;
-  final String? publicKey; // RSA public key in PEM format
-  final bool isAuthenticated; // Whether this peer has been authenticated
+  final String publicKey; // RSA public key in PEM format (required)
+  final List<RoomInfo> rooms; // Rooms this peer is a member of
 
   Peer({
     required this.deviceId,
@@ -14,20 +16,25 @@ class Peer {
     required this.ipAddress,
     required this.tcpPort,
     required this.lastSeen,
-    this.publicKey,
-    this.isAuthenticated = false,
+    required this.publicKey,
+    this.rooms = const [],
   });
 
   /// Create a Peer from JSON received via UDP multicast
   factory Peer.fromJson(Map<String, dynamic> json) {
+    final roomsJson = json['rooms'] as List<dynamic>? ?? [];
+    final rooms = roomsJson
+        .map((r) => RoomInfo.fromJson(r as Map<String, dynamic>))
+        .toList();
+
     return Peer(
       deviceId: json['device_id'] as String,
       deviceName: json['device_name'] as String,
       ipAddress: json['ip_address'] as String,
       tcpPort: json['tcp_port'] as int,
       lastSeen: DateTime.now(),
-      publicKey: json['public_key'] as String?,
-      isAuthenticated: json['is_authenticated'] as bool? ?? false,
+      publicKey: json['public_key'] as String,
+      rooms: rooms,
     );
   }
 
@@ -39,8 +46,8 @@ class Peer {
       'ip_address': ipAddress,
       'tcp_port': tcpPort,
       'timestamp': DateTime.now().microsecondsSinceEpoch,
-      if (publicKey != null) 'public_key': publicKey,
-      'is_authenticated': isAuthenticated,
+      'public_key': publicKey,
+      'rooms': rooms.map((r) => r.toJson()).toList(),
     };
   }
 
@@ -52,7 +59,7 @@ class Peer {
     int? tcpPort,
     DateTime? lastSeen,
     String? publicKey,
-    bool? isAuthenticated,
+    List<RoomInfo>? rooms,
   }) {
     return Peer(
       deviceId: deviceId ?? this.deviceId,
@@ -61,7 +68,7 @@ class Peer {
       tcpPort: tcpPort ?? this.tcpPort,
       lastSeen: lastSeen ?? this.lastSeen,
       publicKey: publicKey ?? this.publicKey,
-      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      rooms: rooms ?? this.rooms,
     );
   }
 

@@ -6,6 +6,7 @@ class Message {
   final String senderName;
   final String content;
   final bool isOutgoing;
+  final String? roomId; // Room ID for multi-room support
 
   Message({
     required this.uuid,
@@ -14,6 +15,7 @@ class Message {
     required this.senderName,
     required this.content,
     required this.isOutgoing,
+    this.roomId,
   });
 
   /// Get DateTime from microseconds timestamp
@@ -29,6 +31,7 @@ class Message {
       senderName: json['sender_name'] as String,
       content: json['content'] as String,
       isOutgoing: false, // Will be determined by comparing with local device ID
+      roomId: json['room_id'] as String?,
     );
   }
 
@@ -51,6 +54,7 @@ class Message {
     String? senderName,
     String? content,
     bool? isOutgoing,
+    String? roomId,
   }) {
     return Message(
       uuid: uuid ?? this.uuid,
@@ -59,6 +63,7 @@ class Message {
       senderName: senderName ?? this.senderName,
       content: content ?? this.content,
       isOutgoing: isOutgoing ?? this.isOutgoing,
+      roomId: roomId ?? this.roomId,
     );
   }
 
