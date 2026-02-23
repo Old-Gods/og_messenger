@@ -265,24 +265,33 @@ class TcpServerService {
       Message finalMessage = parsedMessage;
 
       final messageRoomId = json['room_id'] as String?;
-      if (messageRoomId != null &&
-          RoomService.instance.getRoomAesKey(messageRoomId) != null) {
-        try {
-          final decryptedContent = securityService.decryptMessageForRoom(
-            parsedMessage.content,
-            messageRoomId,
+      if (messageRoomId != null) {
+        final aesKey = RoomService.instance.getRoomAesKey(messageRoomId);
+        if (aesKey != null) {
+          try {
+            final decryptedContent = securityService.decryptMessageForRoom(
+              parsedMessage.content,
+              messageRoomId,
+            );
+            finalMessage = Message(
+              uuid: parsedMessage.uuid,
+              timestampMicros: parsedMessage.timestampMicros,
+              senderId: parsedMessage.senderId,
+              senderName: parsedMessage.senderName,
+              content: decryptedContent,
+              isOutgoing: parsedMessage.isOutgoing,
+              roomId: messageRoomId,
+            );
+            print('🔓 Decrypted message for room: $messageRoomId');
+          } catch (e) {
+            print('⚠️ Failed to decrypt message: $e');
+            return; // Discard message that fails decryption
+          }
+        } else {
+          print(
+            '⚠️ Cannot decrypt message for room $messageRoomId - no AES key available',
           );
-          finalMessage = Message(
-            uuid: parsedMessage.uuid,
-            timestampMicros: parsedMessage.timestampMicros,
-            senderId: parsedMessage.senderId,
-            senderName: parsedMessage.senderName,
-            content: decryptedContent,
-            isOutgoing: parsedMessage.isOutgoing,
-          );
-          print('🔓 Decrypted message for room: $messageRoomId');
-        } catch (e) {
-          print('⚠️ Failed to decrypt message: $e');
+          return; // Discard message for room we don\'t have key for
         }
       }
 

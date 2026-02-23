@@ -434,7 +434,26 @@ class MessageNotifier extends Notifier<MessageState> {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
       final roomState = ref.read(roomProvider);
-      final networkId = roomState.activeRoomId ?? 'default_room';
+      final activeRoomId = roomState.activeRoomId ?? 'default_room';
+      final messageRoomId = message.roomId ?? 'default_room';
+
+      // Save to database with the message's actual room ID
+      await _repository.saveMessage(message, deviceId, messageRoomId);
+
+      // Track sync progress if sync is in progress
+      if (state.syncInProgress) {
+        state = state.copyWith(
+          syncReceivedMessages: state.syncReceivedMessages + 1,
+        );
+      }
+
+      // Only process for UI if message belongs to active room
+      if (messageRoomId != activeRoomId) {
+        print(
+          '📦 Message for different room ($messageRoomId), saved but not displaying (active: $activeRoomId)',
+        );
+        return;
+      }
 
       // Clear typing indicator for this sender
       final updated = Map<String, DateTime>.from(state.typingPeers);
@@ -465,16 +484,6 @@ class MessageNotifier extends Notifier<MessageState> {
       print(
         '💾 Saving new message: "${message.content}" from ${message.senderName}',
       );
-
-      // Save to database
-      await _repository.saveMessage(message, deviceId, networkId);
-
-      // Track sync progress if sync is in progress
-      if (state.syncInProgress) {
-        state = state.copyWith(
-          syncReceivedMessages: state.syncReceivedMessages + 1,
-        );
-      }
 
       // Only update window if in live mode
       if (state.isInLiveMode) {

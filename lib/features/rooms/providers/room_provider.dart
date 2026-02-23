@@ -396,7 +396,7 @@ class RoomNotifier extends Notifier<RoomState> {
   }
 
   /// Handle join response
-  void _handleJoinResponse(Map<String, dynamic> data) {
+  void _handleJoinResponse(Map<String, dynamic> data) async {
     try {
       final requestId = data['request_id'] as String;
       final success = data['success'] as bool;
@@ -415,28 +415,32 @@ class RoomNotifier extends Notifier<RoomState> {
         final creatorName = data['creator_name'] as String;
         final encryptedAesKey = data['encrypted_aes_key'] as String;
 
-        // Join the room
-        RoomService.instance
-            .joinRoom(roomId, roomName, creatorName, encryptedAesKey)
-            .then((_) {
-              // Reload joined rooms
-              _loadState();
+        // Join the room (await to ensure key is stored before messages arrive)
+        try {
+          await RoomService.instance.joinRoom(
+            roomId,
+            roomName,
+            creatorName,
+            encryptedAesKey,
+          );
 
-              // Set as active room
-              state = state.copyWith(activeRoomId: roomId);
+          // Reload joined rooms
+          _loadState();
 
-              // Show notification
-              NotificationService.instance.showJoinAcceptedNotification(
-                roomName: roomName,
-                roomId: roomId,
-              );
+          // Set as active room
+          state = state.copyWith(activeRoomId: roomId);
 
-              print('✅ Successfully joined room: $roomId');
-            })
-            .catchError((e) {
-              print('❌ Failed to join room: $e');
-              state = state.copyWith(error: 'Failed to join room: $e');
-            });
+          // Show notification
+          NotificationService.instance.showJoinAcceptedNotification(
+            roomName: roomName,
+            roomId: roomId,
+          );
+
+          print('✅ Successfully joined room: $roomId');
+        } catch (e) {
+          print('❌ Failed to join room: $e');
+          state = state.copyWith(error: 'Failed to join room: $e');
+        }
       } else {
         final message = data['message'] as String?;
         state = state.copyWith(error: message ?? 'Join request was rejected');

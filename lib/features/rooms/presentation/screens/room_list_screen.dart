@@ -169,14 +169,8 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
     }
 
     final roomsList = allRooms.values.toList();
-    // Sort: joined rooms first, then by name
-    roomsList.sort((a, b) {
-      final aJoined = roomState.joinedRooms.containsKey(a.roomId);
-      final bJoined = roomState.joinedRooms.containsKey(b.roomId);
-      if (aJoined && !bJoined) return -1;
-      if (!aJoined && bJoined) return 1;
-      return a.roomName.compareTo(b.roomName);
-    });
+    // Sort alphabetically by room name
+    roomsList.sort((a, b) => a.roomName.compareTo(b.roomName));
 
     return ListView.builder(
       itemCount: roomsList.length,
