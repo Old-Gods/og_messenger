@@ -41,6 +41,8 @@ flutter:
     - images/og_messenger_icon.dark.png
     - images/og_messenger_no_messages.png
     - images/og_messenger_no_messages.dark.png
+    - images/og_messenger_rooms.png
+    - images/og_messenger_rooms.dark.png
 flutter_launcher_icons:
   android: true
   ios: true

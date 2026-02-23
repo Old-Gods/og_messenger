@@ -553,8 +553,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       children: [
                         Image.asset(
                           Theme.of(context).brightness == Brightness.dark
-                              ? 'images/og_messenger_no_messages.dark.png'
-                              : 'images/og_messenger_no_messages.png',
+                              ? 'images/og_messenger.dark.png'
+                              : 'images/og_messenger.png',
                           width: 128,
                         ),
                         const SizedBox(height: 16),

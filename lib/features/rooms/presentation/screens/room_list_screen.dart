@@ -332,9 +332,9 @@ class _EmptyStateIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Image.asset(
       Theme.of(context).brightness == Brightness.dark
-          ? 'images/og_messenger.dark.png'
-          : 'images/og_messenger.png',
-      width: 64,
+          ? 'images/og_messenger_rooms.dark.png'
+          : 'images/og_messenger_rooms.png',
+      width: 128,
     );
   }
 }
