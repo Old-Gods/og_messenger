@@ -27,7 +27,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   int _previousMessageCount = 0;
   DateTime? _lastTypingIndicatorSent;
   Timer? _typingThrottleTimer;
-  Set<String> _shownJoinRequests = {}; // Track which requests we've shown
+  final Set<String> _shownJoinRequests = {}; // Track which requests we've shown
 
   @override
   void initState() {

@@ -10,6 +10,10 @@ import 'features/messaging/providers/message_provider.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'features/security/data/services/security_service.dart';
 import 'features/rooms/data/services/room_service.dart';
+import 'features/rooms/providers/room_provider.dart';
+
+/// Global navigator key for handling navigation from anywhere (e.g., notifications)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,11 +48,28 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Set up notification tap handling
+    NotificationService.instance.setNavigationCallback((roomId) {
+      _navigateToRoom(roomId);
+    });
+
     // Initialize settings provider (including network ID detection)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       print('🚀 Triggering settings provider initialization from main.dart');
       ref.read(settingsProvider.notifier).initialize();
     });
+  }
+
+  /// Navigate to a specific room
+  void _navigateToRoom(String roomId) {
+    // Get the room provider to switch active room
+    final roomNotifier = ref.read(roomProvider.notifier);
+
+    // Switch to the room
+    roomNotifier.switchActiveRoom(roomId);
+
+    // Navigate to chat screen using the global navigator key
+    navigatorKey.currentState?.pushNamed('/chat');
   }
 
   @override
@@ -68,6 +89,7 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'OG Messenger',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -85,12 +107,17 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
-      home: const UsernamePromptScreen(child: _AppRouter()),
+      home: const UsernamePromptScreen(child: RoomListScreen()),
+      routes: {
+        '/chat': (context) => const ChatScreen(),
+        '/settings': (context) => const SettingsScreen(),
+      },
     );
   }
 }
 
 /// Router widget that handles navigation after username is set
+/// (Kept for reference but no longer used)
 class _AppRouter extends StatelessWidget {
   const _AppRouter();
 

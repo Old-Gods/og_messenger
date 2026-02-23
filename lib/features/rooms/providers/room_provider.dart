@@ -282,6 +282,7 @@ class RoomNotifier extends Notifier<RoomState> {
           requesterName: requesterName,
           roomName: roomName,
           requestId: requestId,
+          roomId: roomId,
         );
       }
 

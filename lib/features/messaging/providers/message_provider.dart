@@ -536,6 +536,7 @@ class MessageNotifier extends Notifier<MessageState> {
             senderName: message.senderName,
             messageContent: message.content,
             messageId: message.uuid,
+            roomId: message.roomId ?? 'default_room',
           );
           print('🔔 Notification shown for message from ${message.senderName}');
         } catch (e) {

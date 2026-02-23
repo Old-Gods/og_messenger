@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// Service for managing local notifications
@@ -9,8 +10,14 @@ class NotificationService {
 
   bool _initialized = false;
   bool _permissionGranted = false;
+  Function(String roomId)? _onNavigateToRoom;
 
   NotificationService._();
+
+  /// Set the navigation callback for handling notification taps
+  void setNavigationCallback(Function(String roomId) callback) {
+    _onNavigateToRoom = callback;
+  }
 
   /// Initialize the notification service
   Future<void> initialize() async {
@@ -81,6 +88,7 @@ class NotificationService {
     required String requesterName,
     required String roomName,
     required String requestId,
+    required String roomId,
   }) async {
     if (!_initialized) await initialize();
 
@@ -116,7 +124,11 @@ class NotificationService {
       title: '🔔 Join Request',
       body: '$requesterName wants to join $roomName',
       notificationDetails: notificationDetails,
-      payload: requestId,
+      payload: jsonEncode({
+        'type': 'join_request',
+        'roomId': roomId,
+        'requestId': requestId,
+      }),
     );
   }
 
@@ -168,6 +180,7 @@ class NotificationService {
     required String senderName,
     required String messageContent,
     required String messageId,
+    required String roomId,
   }) async {
     if (!_initialized) await initialize();
 
@@ -203,27 +216,42 @@ class NotificationService {
       title: senderName,
       body: messageContent,
       notificationDetails: notificationDetails,
-      payload: messageId,
+      payload: jsonEncode({
+        'type': 'message',
+        'roomId': roomId,
+        'messageId': messageId,
+      }),
     );
   }
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    // TODO: Navigate to chat with specific message
-    // This will be implemented when navigation is set up
+    if (response.payload == null) return;
+
+    try {
+      final data = jsonDecode(response.payload!);
+      final roomId = data['roomId'] as String?;
+
+      if (roomId != null && _onNavigateToRoom != null) {
+        print('📱 Notification tapped: navigating to room $roomId');
+        _onNavigateToRoom!(roomId);
+      }
+    } catch (e) {
+      print('⚠️ Failed to handle notification tap: $e');
+    }
   }
 
   /// Create a notification channel for a room (Android)
   /// TODO: Implement per-room notification channels in Step 18
   Future<void> createRoomChannel(String roomId, String roomName) async {
     if (!_initialized) await initialize();
-    
+
     if (Platform.isAndroid) {
       final androidImplementation = _plugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      
+
       await androidImplementation?.createNotificationChannel(
         AndroidNotificationChannel(
           'room_$roomId',
@@ -243,8 +271,10 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      
-      await androidImplementation?.deleteNotificationChannel(channelId: 'room_$roomId');
+
+      await androidImplementation?.deleteNotificationChannel(
+        channelId: 'room_$roomId',
+      );
     }
   }
 
