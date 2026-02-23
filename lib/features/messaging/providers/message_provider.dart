@@ -1,16 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:asn1lib/asn1lib.dart' as asn1;
-import 'package:pointycastle/pointycastle.dart' as pc;
 import '../../settings/providers/settings_provider.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../../notifications/data/services/notification_service.dart';
-import '../../security/data/services/security_service.dart';
 import '../domain/entities/message.dart';
 import '../data/repositories/message_repository.dart';
 import '../data/services/tcp_server_service.dart';
+import '../../rooms/providers/room_provider.dart';
 
 /// Message state
 class MessageState {
@@ -131,12 +128,21 @@ class MessageNotifier extends Notifier<MessageState> {
     _tcpServer.syncRequestStream.listen(_handleSyncRequest);
     _tcpServer.syncReceivedStream.listen(_handleSyncReceived);
     _tcpServer.nameChangeStream.listen(_handleNameChange);
-    _tcpServer.authRequestStream.listen(_handleAuthRequest);
+    // Auth removed - using room-based join requests instead
+    // _tcpServer.authRequestStream.listen(_handleAuthRequest);
     _tcpServer.typingIndicatorStream.listen(_handleTypingIndicator);
 
     // Listen to peer discoveries for auto-sync
     _peerSubscription = ref.listen(discoveryProvider, (previous, next) {
       _handlePeerChanges(previous?.peers ?? {}, next.peers);
+    });
+
+    // Listen to active room changes - reload messages when room changes
+    ref.listen(roomProvider, (previous, next) {
+      if (previous?.activeRoomId != next.activeRoomId && next.activeRoomId != null) {
+        print('🔄 Active room changed, reloading messages for room: ${next.activeRoomId}');
+        Future.microtask(() => loadInitialMessages());
+      }
     });
 
     // Start typing indicator cleanup timer
@@ -200,18 +206,8 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
-
-      // Show warning if not on valid WiFi network
-      if (networkId == 'Unknown' || networkId.isEmpty) {
-        print('⚠️ Not on valid WiFi network - no messages available');
-        state = MessageState(
-          messages: const [],
-          isLoading: false,
-          error: 'WiFi network required',
-        );
-        return;
-      }
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       final messages = await _repository.getAllMessages(deviceId, networkId);
 
@@ -236,18 +232,8 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
-
-      // Show warning if not on valid WiFi network
-      if (networkId == 'Unknown' || networkId.isEmpty) {
-        print('⚠️ Not on valid WiFi network - no messages available');
-        state = MessageState(
-          messages: const [],
-          isLoading: false,
-          error: 'WiFi network required',
-        );
-        return;
-      }
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       final messages = await _repository.getInitialMessages(
         deviceId,
@@ -302,7 +288,8 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       final olderMessages = await _repository.getMessagesBeforeTimestamp(
         deviceId,
@@ -372,7 +359,8 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       final newerMessages = await _repository
           .getMessagesAfterTimestampPaginated(
@@ -438,13 +426,8 @@ class MessageNotifier extends Notifier<MessageState> {
     try {
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
-
-      // Reject messages when not on a valid WiFi network
-      if (networkId == 'Unknown' || networkId.isEmpty) {
-        print('⚠️ Rejecting message - not on valid WiFi network');
-        return;
-      }
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       // Clear typing indicator for this sender
       final updated = Map<String, DateTime>.from(state.typingPeers);
@@ -641,17 +624,18 @@ class MessageNotifier extends Notifier<MessageState> {
       if (deviceId == null) return;
 
       // Get our latest message timestamp, or request from timestamp - 5 messages
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
       final latestTimestamp = await _repository.getLatestTimestamp(
-        settings.networkId,
+        networkId,
       );
       int syncFromTimestamp = 0;
 
       if (latestTimestamp != null && latestTimestamp > 0) {
         // Get the 5th oldest message timestamp to provide overlap
-        final settings = ref.read(settingsProvider);
         final recentMessages = await _repository.getInitialMessages(
           deviceId,
-          settings.networkId,
+          networkId,
           5,
         );
         if (recentMessages.isNotEmpty) {
@@ -855,7 +839,8 @@ class MessageNotifier extends Notifier<MessageState> {
 
       final settings = ref.read(settingsProvider);
       final deviceId = settings.deviceId ?? '';
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
 
       // Calculate overlap - get messages from (sinceTimestamp - 5 messages)
       int fromTimestamp = sinceTimestamp;
@@ -930,8 +915,8 @@ class MessageNotifier extends Notifier<MessageState> {
       print('👤 Processing name change: $deviceId → "$newName"');
 
       // Update all messages from this sender in database
-      final settings = ref.read(settingsProvider);
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
       final updatedCount = await _repository.updateSenderName(
         deviceId,
         newName,
@@ -978,154 +963,29 @@ class MessageNotifier extends Notifier<MessageState> {
   }
 
   /// Handle authentication request from a new peer
+  // Authentication removed - using room-based join requests instead
+  /* 
   Future<void> _handleAuthRequest(Map<String, dynamic> request) async {
-    try {
-      print('🔐 Received auth request');
-
-      final peerAddress = request['peer_address'] as String;
-      final peerPort = request['peer_port'] as int;
-      final encryptedPasswordHash =
-          request['encrypted_password_hash'] as String;
-      final peerPublicKey = request['public_key'] as String;
-
-      print('   From: $peerAddress:$peerPort');
-
-      final securityService = SecurityService.instance;
-
-      // Decrypt the password hash with our private key
-      String decryptedPasswordHash;
-      try {
-        decryptedPasswordHash = securityService.decryptWithPrivateKey(
-          encryptedPasswordHash,
-        );
-        print('🔓 Decrypted password hash');
-      } catch (e) {
-        print('❌ Failed to decrypt password hash: $e');
-        await _tcpServer.sendAuthResponse(
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          success: false,
-          message: 'Failed to decrypt password hash',
-        );
-        return;
-      }
-
-      // Compare with our stored password hash
-      final storedPasswordHash = securityService.passwordHash;
-      if (storedPasswordHash == null) {
-        print('❌ No stored password hash found');
-        await _tcpServer.sendAuthResponse(
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          success: false,
-          message: 'Authentication not configured',
-        );
-        return;
-      }
-
-      if (decryptedPasswordHash != storedPasswordHash) {
-        print('❌ Password hash mismatch');
-        await _tcpServer.sendAuthResponse(
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          success: false,
-          message: 'Invalid password',
-        );
-        return;
-      }
-
-      print(
-        '✅ Password verified! Encrypting AES key with peer\'s public key...',
-      );
-
-      // Get our AES key
-      final aesKeyBase64 = securityService.aesKeyBase64;
-
-      if (aesKeyBase64 == null) {
-        print('❌ No AES key found');
-        await _tcpServer.sendAuthResponse(
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          success: false,
-          message: 'Encryption key not available',
-        );
-        return;
-      }
-
-      // Parse peer's public key and encrypt AES key
-      String encryptedAesKey;
-      try {
-        encryptedAesKey = await _encryptWithPeerPublicKey(
-          aesKeyBase64,
-          peerPublicKey,
-        );
-        print('🔐 AES key encrypted with peer\'s public key');
-      } catch (e) {
-        print('❌ Failed to encrypt AES key: $e');
-        await _tcpServer.sendAuthResponse(
-          peerAddress: peerAddress,
-          peerPort: peerPort,
-          success: false,
-          message: 'Failed to encrypt key',
-        );
-        return;
-      }
-
-      // Send success response with encrypted AES key
-      await _tcpServer.sendAuthResponse(
-        peerAddress: peerAddress,
-        peerPort: peerPort,
-        success: true,
-        encryptedAesKey: encryptedAesKey,
-        message: 'Authentication successful',
-      );
-
-      print('✅ Auth response sent successfully');
-    } catch (e) {
-      print('❌ Failed to handle auth request: $e');
-    }
+    // Old auth code removed - see git history if needed
   }
 
-  /// Encrypt data with peer's RSA public key
   Future<String> _encryptWithPeerPublicKey(
     String plaintext,
     String peerPublicKeyPem,
   ) async {
-    final securityService = SecurityService.instance;
-
-    // Parse the PEM public key
-    final base64String = peerPublicKeyPem.replaceAll('PUBLIC:', '');
-    final bytes = base64Decode(base64String);
-    final asn1Parser = asn1.ASN1Parser(bytes);
-    final seq = asn1Parser.nextObject() as asn1.ASN1Sequence;
-
-    final peerPublicKey = pc.RSAPublicKey(
-      (seq.elements[0] as asn1.ASN1Integer).valueAsBigInteger, // modulus
-      (seq.elements[1] as asn1.ASN1Integer).valueAsBigInteger, // exponent
-    );
-
-    // Encrypt with peer's public key
-    return securityService.encryptWithPublicKey(plaintext, peerPublicKey);
+    // Old auth code removed - see git history if needed
+    throw UnimplementedError('Auth removed');
   }
+  */
 
   /// Send a message to all peers
   Future<void> sendMessage(String content) async {
     final settings = ref.read(settingsProvider);
     final deviceId = settings.deviceId;
     final userName = settings.userName;
-    final networkId = settings.networkId;
 
     if (deviceId == null || userName == null) {
       state = state.copyWith(error: 'Not configured properly');
-      return;
-    }
-
-    // Prevent sending messages when not on a valid WiFi network
-    if (networkId == 'Unknown' || networkId.isEmpty) {
-      state = state.copyWith(
-        error:
-            'WiFi network required. Please connect to WiFi to send messages.',
-      );
       return;
     }
 
@@ -1150,8 +1010,8 @@ class MessageNotifier extends Notifier<MessageState> {
       print('📤 Sending message: "$content"');
 
       // Save to database first
-      final settings = ref.read(settingsProvider);
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
       await _repository.saveMessage(message, deviceId, networkId);
 
       // Update local state with optimized insertion
@@ -1263,8 +1123,8 @@ class MessageNotifier extends Notifier<MessageState> {
   /// Clear all messages
   Future<void> clearAllMessages() async {
     try {
-      final settings = ref.read(settingsProvider);
-      final networkId = settings.networkId;
+      final roomState = ref.read(roomProvider);
+      final networkId = roomState.activeRoomId ?? 'default_room';
       await _repository.clearAllMessages(networkId);
       state = const MessageState();
     } catch (e) {

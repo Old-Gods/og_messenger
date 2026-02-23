@@ -4,6 +4,8 @@ import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/services/multicast_lock_service.dart';
 import '../../../discovery/domain/entities/peer.dart';
+import '../../../rooms/domain/entities/room_info.dart';
+import '../../../rooms/data/services/room_service.dart';
 import '../../../security/data/services/security_service.dart';
 
 /// UDP multicast discovery service for finding peers on the LAN
@@ -202,7 +204,7 @@ class UdpDiscoveryService {
   }
 
   /// Broadcast discovery beacon
-  void _broadcastBeacon() {
+  Future<void> _broadcastBeacon() async {
     if (!_isRunning ||
         _udpSocket == null ||
         _deviceId == null ||
@@ -213,15 +215,28 @@ class UdpDiscoveryService {
     }
 
     try {
+      final roomService = RoomService.instance;
       final securityService = SecurityService.instance;
+
+      // Get joined rooms for beacon
+      final joinedRooms = await roomService.getJoinedRooms();
+      final roomInfos = joinedRooms.map((room) {
+        return RoomInfo(
+          roomId: room.roomId,
+          roomName: room.roomName,
+          creatorName: room.creatorName,
+          isMember: true,
+        );
+      }).toList();
+
       final beacon = Peer(
         deviceId: _deviceId!,
         deviceName: _deviceName!,
         ipAddress: '', // Will be filled by receiver
         tcpPort: _tcpPort!,
         lastSeen: DateTime.now(),
-        publicKey: securityService.publicKeyPem,
-        isAuthenticated: securityService.isAuthenticated,
+        publicKey: securityService.publicKeyPem!,
+        rooms: roomInfos,
       );
 
       final beaconJson = jsonEncode(beacon.toJson());
@@ -259,7 +274,7 @@ class UdpDiscoveryService {
       if (peer.deviceId == _deviceId) return;
 
       print(
-        '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort}',
+        '📡 Discovered peer: ${peer.deviceName} at ${datagram.address.address}:${peer.tcpPort} with ${peer.rooms.length} room(s)',
       );
 
       // Update peer with actual IP address
@@ -270,7 +285,7 @@ class UdpDiscoveryService {
         tcpPort: peer.tcpPort,
         lastSeen: DateTime.now(),
         publicKey: peer.publicKey,
-        isAuthenticated: peer.isAuthenticated,
+        rooms: peer.rooms,
       );
 
       // Add or update peer

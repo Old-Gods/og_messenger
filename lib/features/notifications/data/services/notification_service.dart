@@ -76,6 +76,93 @@ class NotificationService {
     return false;
   }
 
+  /// Show a notification for a join request
+  Future<void> showJoinRequestNotification({
+    required String requesterName,
+    required String roomName,
+    required String requestId,
+  }) async {
+    if (!_initialized) await initialize();
+
+    const androidDetails = AndroidNotificationDetails(
+      'join_requests',
+      'Join Requests',
+      channelDescription: 'Room join request notifications',
+      importance: Importance.max,
+      priority: Priority.max,
+      showWhen: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const macosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macosDetails,
+    );
+
+    await _plugin.show(
+      id: requestId.hashCode,
+      title: '🔔 Join Request',
+      body: '$requesterName wants to join $roomName',
+      notificationDetails: notificationDetails,
+      payload: requestId,
+    );
+  }
+
+  /// Show a notification when join request is accepted
+  Future<void> showJoinAcceptedNotification({
+    required String roomName,
+    required String roomId,
+  }) async {
+    if (!_initialized) await initialize();
+
+    const androidDetails = AndroidNotificationDetails(
+      'join_accepted',
+      'Join Accepted',
+      channelDescription: 'Room join accepted notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const macosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macosDetails,
+    );
+
+    await _plugin.show(
+      id: roomId.hashCode,
+      title: '✅ Welcome!',
+      body: 'You\'ve been accepted into $roomName. Tap to view in My Rooms.',
+      notificationDetails: notificationDetails,
+      payload: roomId,
+    );
+  }
+
   /// Show a notification for a new message
   Future<void> showMessageNotification({
     required String senderName,
@@ -124,6 +211,41 @@ class NotificationService {
   void _onNotificationTapped(NotificationResponse response) {
     // TODO: Navigate to chat with specific message
     // This will be implemented when navigation is set up
+  }
+
+  /// Create a notification channel for a room (Android)
+  /// TODO: Implement per-room notification channels in Step 18
+  Future<void> createRoomChannel(String roomId, String roomName) async {
+    if (!_initialized) await initialize();
+    
+    if (Platform.isAndroid) {
+      final androidImplementation = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      
+      await androidImplementation?.createNotificationChannel(
+        AndroidNotificationChannel(
+          'room_$roomId',
+          'Room: $roomName',
+          description: 'Messages from $roomName',
+          importance: Importance.high,
+        ),
+      );
+    }
+  }
+
+  /// Delete a notification channel for a room (Android)
+  /// TODO: Implement per-room notification cleanup in Step 18
+  Future<void> deleteRoomChannel(String roomId) async {
+    if (Platform.isAndroid) {
+      final androidImplementation = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      
+      await androidImplementation?.deleteNotificationChannel(channelId: 'room_$roomId');
+    }
   }
 
   /// Cancel all notifications

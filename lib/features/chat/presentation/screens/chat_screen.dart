@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/utils/color_utils.dart';
-import '../../../security/data/services/security_service.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../messaging/providers/color_assignment_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
+import '../../../rooms/providers/room_provider.dart';
 
 /// Main chat screen
 class ChatScreen extends ConsumerStatefulWidget {
@@ -29,17 +28,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   DateTime? _lastTypingIndicatorSent;
   Timer? _typingThrottleTimer;
 
-  // Network monitoring
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  String? _initialNetworkId;
-  final Connectivity _connectivity = Connectivity();
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initializeServices();
-    _setupNetworkMonitoring();
     // Add scroll listener for pagination
     _scrollController.addListener(_onScroll);
     // Scroll to bottom after first frame
@@ -53,100 +46,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     _scrollController.dispose();
     _messageFocusNode.dispose();
     _typingThrottleTimer?.cancel();
-    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      // Pause network monitoring when app goes to background
-      _connectivitySubscription?.cancel();
-      _connectivitySubscription = null;
-    } else if (state == AppLifecycleState.resumed) {
-      // Resume network monitoring when app comes back
-      _setupNetworkMonitoring();
-    }
-  }
-
-  void _setupNetworkMonitoring() {
-    // Store initial network ID
-    final settings = ref.read(settingsProvider);
-    _initialNetworkId = settings.networkId;
-
-    // Listen to connectivity changes
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
-      List<ConnectivityResult> results,
-    ) async {
-      await _handleConnectivityChange(results);
-    });
-  }
-
-  Future<void> _handleConnectivityChange(
-    List<ConnectivityResult> results,
-  ) async {
-    final isConnected = !results.contains(ConnectivityResult.none);
-
-    // Refresh network ID
-    await ref.read(settingsProvider.notifier).refreshNetworkId();
-    final currentSettings = ref.read(settingsProvider);
-    final currentNetworkId = currentSettings.networkId;
-
-    // Treat 'Unknown' network ID as disconnected (not on valid WiFi)
-    final isValidNetwork =
-        currentNetworkId != 'Unknown' && currentNetworkId.isNotEmpty;
-    final effectivelyConnected = isConnected && isValidNetwork;
-
-    // Update connectivity status
-    ref
-        .read(settingsProvider.notifier)
-        .updateNetworkStatus(
-          networkId: currentNetworkId,
-          isConnected: effectivelyConnected,
-        );
-
-    // Check if network has changed
-    if (isValidNetwork &&
-        currentNetworkId != _initialNetworkId &&
-        currentNetworkId != 'Unknown') {
-      _showNetworkSwitchDialog();
-    }
-  }
-
-  void _showNetworkSwitchDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Network Changed'),
-        content: const Text(
-          'You\'ve switched networks. Please re-authenticate for security.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              // Get navigator before async operations
-              final navigator = Navigator.of(context, rootNavigator: true);
-
-              // Clear security data
-              await SecurityService.instance.clearSecurityData();
-
-              // Stop discovery
-              await ref.read(discoveryProvider.notifier).stop();
-
-              // Navigate to setup
-              if (mounted) {
-                navigator.pushReplacementNamed('/setup');
-              }
-            },
-            child: const Text('Re-authenticate'),
-          ),
-        ],
-      ),
-    );
+    // Network monitoring removed - will be redesigned for multi-room architecture
   }
 
   void _scrollToBottom({bool animate = true}) {
@@ -292,26 +198,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final content = _messageController.text.trim();
     if (content.isEmpty) return;
 
-    // Check network connectivity
-    final settings = ref.read(settingsProvider);
-    if (!settings.isConnected ||
-        settings.connectedNetworkId != _initialNetworkId) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Cannot send message: Network disconnected or changed',
-          ),
-          backgroundColor: Colors.orange,
-          action: SnackBarAction(
-            label: 'Dismiss',
-            onPressed: () {},
-            textColor: Colors.white,
-          ),
-        ),
-      );
-      return;
-    }
-
     // Validate message size
     final messageBytes = content.codeUnits.length;
     if (messageBytes > NetworkConstants.maxMessageSizeBytes) {
@@ -357,6 +243,129 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     }
   }
 
+  /// Show room information dialog with members list and leave option
+  void _showRoomInfo(dynamic activeRoom, List<dynamic> onlineMembers) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              activeRoom.roomName,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Created by ${activeRoom.creatorName}',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const Divider(height: 32),
+            Text(
+              'Online Members (${onlineMembers.length})',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (onlineMembers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No members online',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: onlineMembers.length,
+                  itemBuilder: (context, index) {
+                    final member = onlineMembers[index];
+                    return ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person, size: 20),
+                      ),
+                      title: Text(member.deviceName),
+                      trailing: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const Divider(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _leaveRoom(activeRoom.roomId);
+                },
+                icon: const Icon(Icons.exit_to_app),
+                label: const Text('Leave Room'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Leave the current room
+  void _leaveRoom(String roomId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave Room'),
+        content: const Text(
+          'Are you sure you want to leave this room? '
+          'All messages will be deleted and you will return to the room list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              ref.read(roomProvider.notifier).leaveRoom(roomId);
+              Navigator.pop(context); // Return to room list
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Left room')),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _buildTypingIndicatorText() {
     final typingPeers = ref.watch(messageProvider).typingPeers;
     final discoveryState = ref.read(discoveryProvider);
@@ -390,8 +399,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   @override
   Widget build(BuildContext context) {
     final messageState = ref.watch(messageProvider);
-    final discoveryState = ref.watch(discoveryProvider);
     final settings = ref.watch(settingsProvider);
+    final roomState = ref.watch(roomProvider);
 
     // Auto-scroll when new messages arrive, but only in live mode
     if (messageState.messages.length != _previousMessageCount &&
@@ -400,44 +409,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
 
+    // Get active room info
+    final activeRoom = roomState.activeRoomId != null
+        ? roomState.joinedRooms[roomState.activeRoomId]
+        : null;
+
+    // Get online member count for active room
+    final discoveryNotifier = ref.read(discoveryProvider.notifier);
+    final onlineMembers = activeRoom != null
+        ? discoveryNotifier.getOnlineMembersForRoom(activeRoom.roomId)
+        : <dynamic>[];
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Back to rooms',
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('OG Messenger', style: TextStyle(fontSize: 20)),
             Text(
-              settings.networkId,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-              ),
+              activeRoom?.roomName ?? 'No Room Selected',
+              style: const TextStyle(fontSize: 18),
             ),
+            if (activeRoom != null)
+              Text(
+                'by ${activeRoom.creatorName} • ${onlineMembers.length} online',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              ),
           ],
         ),
         actions: [
-          // Peer count indicator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.people,
-                    size: 20,
-                    color: discoveryState.peers.isEmpty
-                        ? Colors.grey
-                        : Colors.green,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${discoveryState.peers.length}',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ],
-              ),
+          if (activeRoom != null)
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => _showRoomInfo(activeRoom, onlineMembers),
+              tooltip: 'Room info',
             ),
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.of(context).pushNamed('/settings'),
@@ -465,24 +475,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   SizedBox(width: 8),
                   Text(
                     'Starting services...',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-
-          // Network disconnected banner
-          if (_isInitialized && !settings.isConnected)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.orange,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.wifi_off, color: Colors.white, size: 16),
-                  SizedBox(width: 8),
-                  Text(
-                    'Network disconnected',
                     style: TextStyle(color: Colors.white),
                   ),
                 ],
@@ -524,7 +516,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'No messages yet',
+                          activeRoom == null
+                              ? 'No active room'
+                              : 'No messages yet',
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.grey[600],
@@ -532,9 +526,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          discoveryState.peers.isEmpty
-                              ? 'Waiting for peers to connect...'
-                              : 'Start a conversation!',
+                          activeRoom == null
+                              ? 'Select or create a room to start chatting'
+                              : onlineMembers.isEmpty
+                                  ? 'Waiting for members to come online...'
+                                  : 'Start a conversation!',
                           style: TextStyle(color: Colors.grey[500]),
                         ),
                       ],
@@ -627,15 +623,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   child: TextField(
                     controller: _messageController,
                     focusNode: _messageFocusNode,
-                    enabled:
-                        settings.isConnected &&
-                        settings.connectedNetworkId == _initialNetworkId,
+                    enabled: activeRoom != null,
                     decoration: InputDecoration(
-                      hintText:
-                          settings.isConnected &&
-                              settings.connectedNetworkId == _initialNetworkId
-                          ? 'Type a message...'
-                          : 'Network unavailable',
+                      hintText: activeRoom == null
+                          ? 'Select a room to send messages'
+                          : 'Type a message...',
                       border: const OutlineInputBorder(),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -645,17 +637,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                     maxLines: null,
                     textInputAction: TextInputAction.send,
                     onChanged: _onTextChanged,
-                    onSubmitted: (_) => _sendMessage(),
+                    onSubmitted: activeRoom != null ? (_) => _sendMessage() : null,
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed:
-                      settings.isConnected &&
-                          settings.connectedNetworkId == _initialNetworkId
-                      ? _sendMessage
-                      : null,
+                  onPressed: activeRoom != null ? _sendMessage : null,
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ],

@@ -13,7 +13,7 @@ class MessageRepository {
   Future<void> saveMessage(
     Message message,
     String localDeviceId,
-    String networkId,
+    String roomId,
   ) async {
     final schema = MessageSchema(
       uuid: message.uuid,
@@ -21,7 +21,7 @@ class MessageRepository {
       senderId: message.senderId,
       senderName: message.senderName,
       content: message.content,
-      networkId: networkId,
+      roomId: roomId,
     );
 
     try {

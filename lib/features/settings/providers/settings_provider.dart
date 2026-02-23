@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/services/settings_service.dart';
 import '../../messaging/providers/message_provider.dart';
-import '../../network/data/services/network_info_service.dart';
 
 /// Settings state model
 class SettingsState {
@@ -9,18 +8,12 @@ class SettingsState {
   final String? userName;
   final int retentionDays;
   final bool isFirstLaunch;
-  final String networkId;
-  final bool isConnected;
-  final String connectedNetworkId;
 
   const SettingsState({
     this.deviceId,
     this.userName,
     required this.retentionDays,
     required this.isFirstLaunch,
-    this.networkId = 'Unknown',
-    this.isConnected = true,
-    this.connectedNetworkId = 'Unknown',
   });
 
   bool get hasUserName {
@@ -32,18 +25,12 @@ class SettingsState {
     String? userName,
     int? retentionDays,
     bool? isFirstLaunch,
-    String? networkId,
-    bool? isConnected,
-    String? connectedNetworkId,
   }) {
     return SettingsState(
       deviceId: deviceId ?? this.deviceId,
       userName: userName ?? this.userName,
       retentionDays: retentionDays ?? this.retentionDays,
       isFirstLaunch: isFirstLaunch ?? this.isFirstLaunch,
-      networkId: networkId ?? this.networkId,
-      isConnected: isConnected ?? this.isConnected,
-      connectedNetworkId: connectedNetworkId ?? this.connectedNetworkId,
     );
   }
 }
@@ -68,25 +55,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
     print('⚙️ Initializing settings provider...');
     await _service.initialize();
 
-    // Register callback for macOS location permission grant
-    NetworkInfoService.instance.setNetworkIdRefreshCallback((networkId) {
-      print('🔄 Network ID refreshed after permission grant: $networkId');
-      state = state.copyWith(
-        networkId: networkId,
-        isConnected: networkId != 'Unknown' && networkId.isNotEmpty,
-        connectedNetworkId: networkId,
-      );
-    });
-
-    print('⚙️ Fetching network ID...');
-    final networkId = await NetworkInfoService.instance.getCurrentNetworkId();
-    print('⚙️ Network ID result: $networkId');
     state = SettingsState(
       deviceId: _service.deviceId,
       userName: _service.userName,
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
-      networkId: networkId,
     );
   }
 
@@ -116,34 +89,14 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(retentionDays: _service.retentionDays);
   }
 
-  /// Refresh network ID (call when network changes)
-  Future<void> refreshNetworkId() async {
-    final networkId = await NetworkInfoService.instance.getCurrentNetworkId();
-    state = state.copyWith(networkId: networkId);
-  }
-
-  /// Update network connectivity status
-  void updateNetworkStatus({
-    required String networkId,
-    required bool isConnected,
-  }) {
-    state = state.copyWith(
-      networkId: networkId,
-      isConnected: isConnected,
-      connectedNetworkId: networkId,
-    );
-  }
-
   /// Reset all settings
   Future<void> resetAll() async {
     await _service.resetAll();
-    final networkId = await NetworkInfoService.instance.getCurrentNetworkId();
     state = SettingsState(
       deviceId: _service.deviceId,
       userName: _service.userName,
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
-      networkId: networkId,
     );
   }
 }

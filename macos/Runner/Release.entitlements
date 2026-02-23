@@ -2,10 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
-		<!-- Sandbox disabled to allow WiFi SSID access via CoreWLAN -->
-		<!-- <key>com.apple.security.app-sandbox</key>
-		<true/> -->
-		<!-- Network entitlements not needed without sandbox, but keeping for clarity -->
+		<!-- Sandbox re-enabled: no longer need WiFi SSID access for multi-room architecture -->
+		<key>com.apple.security.app-sandbox</key>
+		<true/>
 		<key>com.apple.security.network.client</key>
 		<true/>
 		<key>com.apple.security.network.server</key>

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import '../../../../core/constants/network_constants.dart';
 import '../../../messaging/domain/entities/message.dart';
-import '../../../security/data/services/security_service.dart';
 
 /// TCP server for receiving messages from peers
 class TcpServerService {
@@ -24,9 +23,9 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _nameChangeController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _authRequestController =
+  final StreamController<Map<String, dynamic>> _joinRequestController =
       StreamController<Map<String, dynamic>>.broadcast();
-  final StreamController<Map<String, dynamic>> _authResponseController =
+  final StreamController<Map<String, dynamic>> _joinResponseController =
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _typingIndicatorController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -49,13 +48,13 @@ class TcpServerService {
   Stream<Map<String, dynamic>> get nameChangeStream =>
       _nameChangeController.stream;
 
-  /// Stream of auth requests
-  Stream<Map<String, dynamic>> get authRequestStream =>
-      _authRequestController.stream;
+  /// Stream of join requests
+  Stream<Map<String, dynamic>> get joinRequestStream =>
+      _joinRequestController.stream;
 
-  /// Stream of auth responses
-  Stream<Map<String, dynamic>> get authResponseStream =>
-      _authResponseController.stream;
+  /// Stream of join responses
+  Stream<Map<String, dynamic>> get joinResponseStream =>
+      _joinResponseController.stream;
 
   /// Stream of typing indicators
   Stream<Map<String, dynamic>> get typingIndicatorStream =>
@@ -216,25 +215,31 @@ class TcpServerService {
         return;
       }
 
-      // Check if this is an auth request
-      if (json['type'] == 'auth_request') {
-        print('🔐 Received auth request');
-        _authRequestController.add({
-          'device_id': json['device_id'] as String,
-          'device_name': json['device_name'] as String,
-          'encrypted_password_hash': json['encrypted_password_hash'] as String,
-          'public_key': json['public_key'] as String,
+      // Check if this is a join request
+      if (json['type'] == 'join_request') {
+        print('🔐 Received join request');
+        _joinRequestController.add({
+          'request_id': json['request_id'] as String,
+          'room_id': json['room_id'] as String,
+          'room_name': json['room_name'] as String,
+          'requester_device_id': json['requester_device_id'] as String,
+          'requester_name': json['requester_name'] as String,
+          'requester_public_key': json['requester_public_key'] as String,
           'peer_address': socket.remoteAddress.address,
           'peer_port': json['tcp_port'] as int,
         });
         return;
       }
 
-      // Check if this is an auth response
-      if (json['type'] == 'auth_response') {
-        print('✅ Received auth response');
-        _authResponseController.add({
+      // Check if this is a join response
+      if (json['type'] == 'join_response') {
+        print('✅ Received join response');
+        _joinResponseController.add({
+          'request_id': json['request_id'] as String,
           'success': json['success'] as bool,
+          'room_id': json['room_id'] as String?,
+          'room_name': json['room_name'] as String?,
+          'creator_name': json['creator_name'] as String?,
           'encrypted_aes_key': json['encrypted_aes_key'] as String?,
           'message': json['message'] as String?,
         });
@@ -253,28 +258,29 @@ class TcpServerService {
       // Otherwise, it's a regular message
       final parsedMessage = Message.fromJson(json);
 
-      // Decrypt message if we're authenticated
-      final securityService = SecurityService.instance;
+      // TODO: Decrypt message if we have room key
+      // Will be implemented after room-based architecture is complete
+      // final securityService = SecurityService.instance;
       Message finalMessage = parsedMessage;
 
-      if (securityService.hasAesKey) {
-        try {
-          final decryptedContent = securityService.decryptMessage(
-            parsedMessage.content,
-          );
-          finalMessage = Message(
-            uuid: parsedMessage.uuid,
-            timestampMicros: parsedMessage.timestampMicros,
-            senderId: parsedMessage.senderId,
-            senderName: parsedMessage.senderName,
-            content: decryptedContent,
-            isOutgoing: parsedMessage.isOutgoing,
-          );
-        } catch (e) {
-          print('⚠️ Failed to decrypt message: $e');
-          // Keep original message if decryption fails
-        }
-      }
+      // if (securityService.hasRoomKey(roomId)) {
+      //   try {
+      //     final decryptedContent = securityService.decryptMessageForRoom(
+      //       parsedMessage.content,
+      //       roomId,
+      //     );
+      //     finalMessage = Message(
+      //       uuid: parsedMessage.uuid,
+      //       timestampMicros: parsedMessage.timestampMicros,
+      //       senderId: parsedMessage.senderId,
+      //       senderName: parsedMessage.senderName,
+      //       content: decryptedContent,
+      //       isOutgoing: parsedMessage.isOutgoing,
+      //     );
+      //   } catch (e) {
+      //     print('⚠️ Failed to decrypt message: $e');
+      //   }
+      // }
 
       print(
         '📨 Received message from ${finalMessage.senderName}: ${finalMessage.content}',
@@ -294,28 +300,29 @@ class TcpServerService {
     Message message,
   ) async {
     try {
-      // Encrypt message if we're authenticated
-      final securityService = SecurityService.instance;
+      // TODO: Encrypt message if we have room key
+      // Will be implemented after room-based architecture is complete
+      // final securityService = SecurityService.instance;
       Message messageToSend = message;
 
-      if (securityService.hasAesKey) {
-        try {
-          final encryptedContent = securityService.encryptMessage(
-            message.content,
-          );
-          messageToSend = Message(
-            uuid: message.uuid,
-            timestampMicros: message.timestampMicros,
-            senderId: message.senderId,
-            senderName: message.senderName,
-            content: encryptedContent,
-            isOutgoing: message.isOutgoing,
-          );
-        } catch (e) {
-          print('⚠️ Failed to encrypt message: $e');
-          // Continue with unencrypted message
-        }
-      }
+      // if (securityService.hasRoomKey(roomId)) {
+      //   try {
+      //     final encryptedContent = securityService.encryptMessageForRoom(
+      //       message.content,
+      //       roomId,
+      //     );
+      //     messageToSend = Message(
+      //       uuid: message.uuid,
+      //       timestampMicros: message.timestampMicros,
+      //       senderId: message.senderId,
+      //       senderName: message.senderName,
+      //       content: encryptedContent,
+      //       isOutgoing: message.isOutgoing,
+      //     );
+      //   } catch (e) {
+      //     print('⚠️ Failed to encrypt message: $e');
+      //   }
+      // }
 
       final messageJson = jsonEncode(messageToSend.toJson());
       final messageBytes = utf8.encode(messageJson);
@@ -393,7 +400,9 @@ class TcpServerService {
       };
 
       final ackJson = jsonEncode(acknowledgment);
-      print('📤 Sending sync acknowledgment to $peerAddress:$peerPort (messages: $messageCount)');
+      print(
+        '📤 Sending sync acknowledgment to $peerAddress:$peerPort (messages: $messageCount)',
+      );
 
       final socket = await Socket.connect(peerAddress, peerPort);
       socket.write('$ackJson\n');
@@ -403,7 +412,9 @@ class TcpServerService {
       print('✅ Sync acknowledgment sent successfully');
       return true;
     } catch (e) {
-      print('❌ Failed to send sync acknowledgment to $peerAddress:$peerPort: $e');
+      print(
+        '❌ Failed to send sync acknowledgment to $peerAddress:$peerPort: $e',
+      );
       return false;
     }
   }
@@ -535,64 +546,74 @@ class TcpServerService {
   /// Get count of connected peers
   int get connectedPeerCount => _connectedPeers.length;
 
-  /// Send authentication request to a peer
-  Future<bool> sendAuthRequest({
+  /// Send join request to a peer (room member)
+  Future<bool> sendJoinRequest({
     required String peerAddress,
     required int peerPort,
-    required String deviceId,
-    required String deviceName,
-    required String encryptedPasswordHash,
-    required String publicKey,
+    required String requestId,
+    required String roomId,
+    required String roomName,
+    required String requesterDeviceId,
+    required String requesterName,
+    required String requesterPublicKey,
     required int tcpPort,
   }) async {
     try {
       final request = {
-        'type': 'auth_request',
-        'device_id': deviceId,
-        'device_name': deviceName,
-        'encrypted_password_hash': encryptedPasswordHash,
-        'public_key': publicKey,
+        'type': 'join_request',
+        'request_id': requestId,
+        'room_id': roomId,
+        'room_name': roomName,
+        'requester_device_id': requesterDeviceId,
+        'requester_name': requesterName,
+        'requester_public_key': requesterPublicKey,
         'tcp_port': tcpPort,
       };
 
       final requestJson = jsonEncode(request);
-      print('📤 Sending auth request to $peerAddress:$peerPort');
+      print('📤 Sending join request to $peerAddress:$peerPort');
 
       final socket = await Socket.connect(peerAddress, peerPort);
       socket.write('$requestJson\n');
       await socket.flush();
       await socket.close();
 
-      print('✅ Auth request sent successfully');
+      print('✅ Join request sent successfully');
       return true;
     } catch (e) {
-      print('❌ Failed to send auth request to $peerAddress:$peerPort: $e');
-      _errorController.add('Failed to send auth request: $e');
+      print('❌ Failed to send join request to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send join request: $e');
       return false;
     }
   }
 
-  /// Send authentication response to a peer
-  Future<bool> sendAuthResponse({
+  /// Send join response to a peer
+  Future<bool> sendJoinResponse({
     required String peerAddress,
     required int peerPort,
+    required String requestId,
     required bool success,
+    String? roomId,
+    String? roomName,
+    String? creatorName,
     String? encryptedAesKey,
     String? message,
   }) async {
     try {
       final response = {
-        'type': 'auth_response',
+        'type': 'join_response',
+        'request_id': requestId,
         'success': success,
-        ...?encryptedAesKey != null
-            ? {'encrypted_aes_key': encryptedAesKey}
-            : null,
-        ...?message != null ? {'message': message} : null,
+        if (roomId != null) 'room_id': roomId,
+        if (roomName != null) 'room_name': roomName,
+        if (creatorName != null) 'creator_name': creatorName,
+        if (encryptedAesKey != null) 'encrypted_aes_key': encryptedAesKey,
+        if (message != null) 'message': message,
       };
 
       final responseJson = jsonEncode(response);
       print(
-        '📤 Sending auth response to $peerAddress:$peerPort (success: $success)',
+        '📤 Sending join response to $peerAddress:$peerPort (success: $success)',
       );
 
       final socket = await Socket.connect(peerAddress, peerPort);
@@ -600,11 +621,11 @@ class TcpServerService {
       await socket.flush();
       await socket.close();
 
-      print('✅ Auth response sent successfully');
+      print('✅ Join response sent successfully');
       return true;
     } catch (e) {
-      print('❌ Failed to send auth response to $peerAddress:$peerPort: $e');
-      _errorController.add('Failed to send auth response: $e');
+      print('❌ Failed to send join response to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send join response: $e');
       return false;
     }
   }
@@ -634,7 +655,9 @@ class TcpServerService {
     _errorController.close();
     _syncRequestController.close();
     _nameChangeController.close();
-    _authRequestController.close();
-    _authResponseController.close();
+    _joinRequestController.close();
+    _joinResponseController.close();
+    _typingIndicatorController.close();
+    _syncReceivedController.close();
   }
 }
