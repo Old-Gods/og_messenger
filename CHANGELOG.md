@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.1.0](https://github.com/Old-Gods/og_messenger/compare/v2.0.0...v2.1.0) (2026-02-24)
+
+
+### Features
+
+* add multicast membership refresh to prevent IGMP timeout ([793f402](https://github.com/Old-Gods/og_messenger/commit/793f402c5ef83966a86599f2764fffcf83734b06))
+* add theme mode setting and dialog for user preference ([7703480](https://github.com/Old-Gods/og_messenger/commit/770348011fb38019a4fc8a8d083d1861b4754855))
+* enhance message bubble to display online status of members ([e3fddde](https://github.com/Old-Gods/og_messenger/commit/e3fddde5f94b16a3a7d65b97a478c10299cd2d8e))
+* implement health check for UDP discovery service and improve multicast lock handling ([89de50b](https://github.com/Old-Gods/og_messenger/commit/89de50b1c981abd643693c3ea6a426e0cf9f2960))
+
+
+### Bug Fixes
+
+* cross-room message synchronization ([67af62b](https://github.com/Old-Gods/og_messenger/commit/67af62bd78d7a8d0b556b430d9b9d2eee3492441))
+* enhance multicast membership handling and improve error reporting ([4cd61b5](https://github.com/Old-Gods/og_messenger/commit/4cd61b56c81fdb02c8759f15e2e0c56d6942cc16))
+* remove clear all messages dialog and associated button from settings screen ([7fc984b](https://github.com/Old-Gods/og_messenger/commit/7fc984bded9ea3197110e117ab3afdb28bc5c218))
+* remove clear all messages dialog and associated button from settings screen ([c368074](https://github.com/Old-Gods/og_messenger/commit/c3680743f27457c554e94bf6b3c383ad07d5ee5b)), closes [#23](https://github.com/Old-Gods/og_messenger/issues/23)
+* update reusePort setting for cross-platform compatibility in UDP socket binding ([f7dbed6](https://github.com/Old-Gods/og_messenger/commit/f7dbed6d9447a8ada102e697133d77fe2a3a6626))
+
 ## [2.0.0](https://github.com/Old-Gods/og_messenger/compare/v1.2.0...v2.0.0) (2026-02-24)
 
 
