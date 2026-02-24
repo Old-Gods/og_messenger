@@ -88,6 +88,22 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+
+    // Convert string theme mode to ThemeMode enum
+    ThemeMode themeMode;
+    switch (settings.themeMode) {
+      case 'light':
+        themeMode = ThemeMode.light;
+        break;
+      case 'dark':
+        themeMode = ThemeMode.dark;
+        break;
+      case 'system':
+      default:
+        themeMode = ThemeMode.system;
+    }
+
     return MaterialApp(
       navigatorKey: navigatorKey,
       title: 'OG Messenger',
@@ -106,7 +122,7 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
         ),
         useMaterial3: true,
       ),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       home: const UsernamePromptScreen(child: RoomListScreen()),
       routes: {
         '/chat': (context) => const ChatScreen(),
