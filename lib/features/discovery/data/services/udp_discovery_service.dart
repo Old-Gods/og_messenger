@@ -13,6 +13,10 @@ class UdpDiscoveryService {
   RawDatagramSocket? _udpSocket;
   Timer? _beaconTimer;
   Timer? _cleanupTimer;
+  Timer? _healthCheckTimer;
+  DateTime? _lastPacketReceived;
+  int _packetsReceived = 0;
+  int _beaconsSent = 0;
 
   final Map<String, Peer> _discoveredPeers = {};
   final StreamController<Map<String, Peer>> _peerController =
@@ -175,6 +179,12 @@ class UdpDiscoveryService {
         (_) => _cleanupExpiredPeers(),
       );
 
+      // Start health check timer to monitor socket activity
+      _healthCheckTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _checkSocketHealth(),
+      );
+
       _isRunning = true;
 
       // Send initial beacon immediately (unless in listen-only mode)
@@ -265,6 +275,7 @@ class UdpDiscoveryService {
         InternetAddress(NetworkConstants.multicastAddress),
         NetworkConstants.multicastPort,
       );
+      _beaconsSent++;
     } catch (e) {
       print('❌ Failed to broadcast beacon: $e');
       _errorController.add('Failed to broadcast beacon: $e');
@@ -276,6 +287,8 @@ class UdpDiscoveryService {
     if (event == RawSocketEvent.read) {
       final datagram = _udpSocket?.receive();
       if (datagram != null) {
+        _packetsReceived++;
+        _lastPacketReceived = DateTime.now();
         _handleBeacon(datagram);
       }
     }
@@ -313,6 +326,39 @@ class UdpDiscoveryService {
       _peerController.add(Map.unmodifiable(_discoveredPeers));
     } catch (e) {
       _errorController.add('Failed to parse beacon: $e');
+    }
+  }
+
+  /// Check socket health and log diagnostics
+  void _checkSocketHealth() {
+    if (!_isRunning) return;
+
+    final now = DateTime.now();
+    final timeSinceLastPacket = _lastPacketReceived != null
+        ? now.difference(_lastPacketReceived!)
+        : null;
+
+    print('📊 UDP Discovery Health Check:');
+    print('   Beacons sent: $_beaconsSent');
+    print('   Packets received: $_packetsReceived');
+    print('   Active peers: ${_discoveredPeers.length}');
+    if (timeSinceLastPacket != null) {
+      print('   Last packet: ${timeSinceLastPacket.inSeconds}s ago');
+    } else {
+      print('   Last packet: Never');
+    }
+
+    // Warn if no packets received in 15 seconds but we're broadcasting
+    if (timeSinceLastPacket != null &&
+        timeSinceLastPacket.inSeconds > 15 &&
+        _beaconsSent > 0) {
+      print(
+        '⚠️ UDP socket may be dead - no packets in ${timeSinceLastPacket.inSeconds}s',
+      );
+      _errorController.add(
+        'Warning: No UDP packets received in ${timeSinceLastPacket.inSeconds} seconds. '
+        'Multicast may not be working.',
+      );
     }
   }
 
@@ -361,6 +407,9 @@ class UdpDiscoveryService {
 
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
+
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
 
     // Close UDP socket
     _udpSocket?.close();
