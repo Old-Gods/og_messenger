@@ -147,7 +147,8 @@ class UdpDiscoveryService {
         InternetAddress.anyIPv4,
         NetworkConstants.multicastPort,
         reuseAddress: true,
-        reusePort: Platform.isMacOS || Platform.isWindows || Platform.isLinux,
+        reusePort:
+            true, // Platform.isMacOS || Platform.isWindows || Platform.isLinux,
       );
       print('✅ UDP socket bound to 0.0.0.0:${NetworkConstants.multicastPort}');
 
@@ -352,13 +353,37 @@ class UdpDiscoveryService {
     }
 
     try {
-      // Leave and rejoin the multicast group
+      print('🔄 Refreshing multicast group membership...');
+
+      // Leave the multicast group
       _udpSocket!.leaveMulticast(_multicastAddress!, _selectedInterface!);
-      _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
-      print('🔄 Refreshed multicast group membership');
+
+      // Small delay to ensure leave is processed at OS level
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!_isRunning || _udpSocket == null) return;
+
+        try {
+          // Reconfigure socket before rejoining
+          _udpSocket!.broadcastEnabled = true;
+
+          // Rejoin the multicast group
+          _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
+
+          // Reapply multicast settings to ensure they're active
+          _udpSocket!.setRawOption(
+            RawSocketOption.fromInt(0, 33, 2),
+          ); // IP_MULTICAST_TTL
+          _udpSocket!.multicastLoopback = true;
+
+          print('✅ Multicast group membership refreshed successfully');
+        } catch (e) {
+          print('⚠️ Failed to rejoin multicast group: $e');
+          _errorController.add('Failed to rejoin multicast: $e');
+        }
+      });
     } catch (e) {
-      print('⚠️ Failed to refresh multicast membership: $e');
-      _errorController.add('Failed to refresh multicast membership: $e');
+      print('⚠️ Failed to leave multicast group: $e');
+      _errorController.add('Failed to leave multicast: $e');
     }
   }
 
@@ -387,6 +412,18 @@ class UdpDiscoveryService {
       print('   Last packet: ${timeSinceLastPacket.inSeconds}s ago');
     } else {
       print('   Last packet: Never');
+    }
+
+    // Detect loopback-only mode: receiving packets but no active peers
+    // This suggests we're only receiving our own beacons, not from other devices
+    if (packetsSinceLastCheck > 0 &&
+        _discoveredPeers.isEmpty &&
+        beaconsSinceLastCheck > 0) {
+      print(
+        '⚠️ Loopback-only mode detected - packets received but no peers. '
+        'Triggering multicast refresh...',
+      );
+      _refreshMulticastMembership();
     }
 
     // Warn if no packets received in 15 seconds but we're broadcasting
