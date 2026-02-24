@@ -123,6 +123,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  String _getThemeLabel(String mode) {
+    switch (mode) {
+      case 'light':
+        return 'Light';
+      case 'dark':
+        return 'Dark';
+      case 'system':
+      default:
+        return 'System (Auto)';
+    }
+  }
+
+  Future<void> _showThemeDialog() async {
+    final settings = ref.read(settingsProvider);
+    final selectedMode = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Theme'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('Light'),
+              value: 'light',
+              groupValue: settings.themeMode,
+              onChanged: (value) => Navigator.of(context).pop(value),
+            ),
+            RadioListTile<String>(
+              title: const Text('Dark'),
+              value: 'dark',
+              groupValue: settings.themeMode,
+              onChanged: (value) => Navigator.of(context).pop(value),
+            ),
+            RadioListTile<String>(
+              title: const Text('System (Auto)'),
+              subtitle: const Text('Follow system theme'),
+              value: 'system',
+              groupValue: settings.themeMode,
+              onChanged: (value) => Navigator.of(context).pop(value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedMode != null && selectedMode != settings.themeMode) {
+      await ref.read(settingsProvider.notifier).setThemeMode(selectedMode);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Theme changed to ${_getThemeLabel(selectedMode)}'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _showClearMessagesDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -221,6 +284,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               settings.deviceId ?? 'Not set',
               style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
+          ),
+          const Divider(),
+
+          // Appearance
+          const ListTile(
+            title: Text(
+              'Appearance',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.palette),
+            title: const Text('Theme'),
+            subtitle: Text(_getThemeLabel(settings.themeMode)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showThemeDialog(),
           ),
           const Divider(),
 

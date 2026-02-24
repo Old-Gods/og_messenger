@@ -10,6 +10,7 @@ class SettingsService {
   static const String _keyUserName = 'user_name';
   static const String _keyRetentionDays = 'retention_days';
   static const String _keyFirstLaunch = 'first_launch';
+  static const String _keyThemeMode = 'theme_mode';
 
   static final SettingsService instance = SettingsService._();
   SharedPreferences? _prefs;
@@ -141,6 +142,21 @@ class SettingsService {
     await _prefs!.remove(_keyUserName);
     await _prefs!.setBool(_keyFirstLaunch, true);
     return true;
+  }
+
+  /// Get the theme mode setting ('light', 'dark', or 'system')
+  String get themeMode {
+    return _prefs?.getString(_keyThemeMode) ?? 'system';
+  }
+
+  /// Set the theme mode ('light', 'dark', or 'system')
+  Future<bool> setThemeMode(String mode) async {
+    if (_prefs == null) return false;
+    // Validate mode
+    if (!['light', 'dark', 'system'].contains(mode)) {
+      return false;
+    }
+    return await _prefs!.setString(_keyThemeMode, mode);
   }
 
   /// Reset all settings (for testing)

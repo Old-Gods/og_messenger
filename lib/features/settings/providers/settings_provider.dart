@@ -8,12 +8,14 @@ class SettingsState {
   final String? userName;
   final int retentionDays;
   final bool isFirstLaunch;
+  final String themeMode;
 
   const SettingsState({
     this.deviceId,
     this.userName,
     required this.retentionDays,
     required this.isFirstLaunch,
+    this.themeMode = 'system',
   });
 
   bool get hasUserName {
@@ -25,12 +27,14 @@ class SettingsState {
     String? userName,
     int? retentionDays,
     bool? isFirstLaunch,
+    String? themeMode,
   }) {
     return SettingsState(
       deviceId: deviceId ?? this.deviceId,
       userName: userName ?? this.userName,
       retentionDays: retentionDays ?? this.retentionDays,
       isFirstLaunch: isFirstLaunch ?? this.isFirstLaunch,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 }
@@ -47,6 +51,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       userName: _service.userName,
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
+      themeMode: _service.themeMode,
     );
   }
 
@@ -60,6 +65,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       userName: _service.userName,
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
+      themeMode: _service.themeMode,
     );
   }
 
@@ -89,6 +95,12 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(retentionDays: _service.retentionDays);
   }
 
+  /// Update theme mode
+  Future<void> setThemeMode(String mode) async {
+    await _service.setThemeMode(mode);
+    state = state.copyWith(themeMode: _service.themeMode);
+  }
+
   /// Reset all settings
   Future<void> resetAll() async {
     await _service.resetAll();
@@ -97,6 +109,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       userName: _service.userName,
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
+      themeMode: _service.themeMode,
     );
   }
 }
