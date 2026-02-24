@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/network_constants.dart';
@@ -107,17 +108,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (!serverStarted) {
         print('❌ Failed to start TCP server');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Failed to start messaging server'),
-              backgroundColor: Colors.red,
-              action: SnackBarAction(
-                label: 'Dismiss',
-                textColor: Colors.white,
-                onPressed: () {},
-              ),
-            ),
-          );
+          Flushbar(
+            message: 'Failed to start messaging server',
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            flushbarPosition: FlushbarPosition.TOP,
+            margin: const EdgeInsets.all(8),
+            borderRadius: BorderRadius.circular(8),
+          ).show(context);
         }
         return;
       }
@@ -139,21 +137,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             print('   Error: ${discoveryState.error}');
           }
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
+            Flushbar(
+              message:
                   'UDP discovery failed: ${discoveryState.error ?? "Unknown error"}\n'
                   'Note: iOS Simulator has limited multicast support. Use real devices for full functionality.',
-                ),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 8),
-                action: SnackBarAction(
-                  label: 'Dismiss',
-                  textColor: Colors.white,
-                  onPressed: () {},
-                ),
-              ),
-            );
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 8),
+              flushbarPosition: FlushbarPosition.TOP,
+              margin: const EdgeInsets.all(8),
+              borderRadius: BorderRadius.circular(8),
+            ).show(context);
           }
         }
       } else {
@@ -174,18 +167,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       print('❌ Error initializing services: $e');
       print('Stack trace: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error starting services: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {},
-            ),
-          ),
-        );
+        Flushbar(
+          message: 'Error starting services: $e',
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+        ).show(context);
       }
     }
   }
@@ -197,15 +186,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // Validate message size
     final messageBytes = content.codeUnits.length;
     if (messageBytes > NetworkConstants.maxMessageSizeBytes) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
+      Flushbar(
+        message:
             'Message too large: ${(messageBytes / 1024).toStringAsFixed(1)}KB (max: ${NetworkConstants.maxMessageSizeBytes / 1024}KB)',
-          ),
-          action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 3),
+        flushbarPosition: FlushbarPosition.TOP,
+        margin: const EdgeInsets.all(8),
+        borderRadius: BorderRadius.circular(8),
+      ).show(context);
       return;
     }
 
@@ -371,15 +360,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   ref
                       .read(roomProvider.notifier)
                       .acceptJoinRequest(request.requestId);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '${request.requesterName} has joined the room',
-                      ),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
+                  Flushbar(
+                    message: '${request.requesterName} has joined the room',
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                    flushbarPosition: FlushbarPosition.TOP,
+                    margin: const EdgeInsets.all(8),
+                    borderRadius: BorderRadius.circular(8),
+                  ).show(context);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 child: const Text('Accept'),

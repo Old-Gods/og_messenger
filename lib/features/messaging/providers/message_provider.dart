@@ -36,6 +36,10 @@ class MessageState {
   syncExpectedMessages; // Number of messages expected in current sync batch
   final int
   syncReceivedMessages; // Number of messages received in current sync batch
+  final Map<String, int>
+  peerSyncExpected; // Expected messages per peer (concurrent syncs)
+  final Map<String, int>
+  peerSyncReceived; // Received messages per peer (concurrent syncs)
 
   const MessageState({
     this.messages = const [],
@@ -57,6 +61,8 @@ class MessageState {
     this.syncAckReceived = false,
     this.syncExpectedMessages = 0,
     this.syncReceivedMessages = 0,
+    this.peerSyncExpected = const {},
+    this.peerSyncReceived = const {},
   });
 
   MessageState copyWith({
@@ -79,6 +85,8 @@ class MessageState {
     bool? syncAckReceived,
     int? syncExpectedMessages,
     int? syncReceivedMessages,
+    Map<String, int>? peerSyncExpected,
+    Map<String, int>? peerSyncReceived,
   }) {
     return MessageState(
       messages: messages ?? this.messages,
@@ -100,6 +108,8 @@ class MessageState {
       syncAckReceived: syncAckReceived ?? this.syncAckReceived,
       syncExpectedMessages: syncExpectedMessages ?? this.syncExpectedMessages,
       syncReceivedMessages: syncReceivedMessages ?? this.syncReceivedMessages,
+      peerSyncExpected: peerSyncExpected ?? this.peerSyncExpected,
+      peerSyncReceived: peerSyncReceived ?? this.peerSyncReceived,
     );
   }
 }
@@ -463,11 +473,18 @@ class MessageNotifier extends Notifier<MessageState> {
           '⚠️ Skipping duplicate message: "${message.content}" from ${message.senderName}',
         );
 
-        // Track sync progress even for duplicates
-        if (state.syncInProgress) {
-          state = state.copyWith(
-            syncReceivedMessages: state.syncReceivedMessages + 1,
-          );
+        // Track sync progress per peer for duplicates too
+        if (state.peerSyncExpected.containsKey(message.senderId)) {
+          final received = Map<String, int>.from(state.peerSyncReceived);
+          received[message.senderId] = (received[message.senderId] ?? 0) + 1;
+          state = state.copyWith(peerSyncReceived: received);
+
+          // Also update global counter for backwards compatibility
+          if (state.syncInProgress) {
+            state = state.copyWith(
+              syncReceivedMessages: state.syncReceivedMessages + 1,
+            );
+          }
         }
 
         return;
@@ -476,11 +493,18 @@ class MessageNotifier extends Notifier<MessageState> {
       // Save to database with the message's actual room ID
       await _repository.saveMessage(message, deviceId, messageRoomId);
 
-      // Track sync progress if sync is in progress
-      if (state.syncInProgress) {
-        state = state.copyWith(
-          syncReceivedMessages: state.syncReceivedMessages + 1,
-        );
+      // Track sync progress per peer
+      if (state.peerSyncExpected.containsKey(message.senderId)) {
+        final received = Map<String, int>.from(state.peerSyncReceived);
+        received[message.senderId] = (received[message.senderId] ?? 0) + 1;
+        state = state.copyWith(peerSyncReceived: received);
+
+        // Also update global counter for backwards compatibility
+        if (state.syncInProgress) {
+          state = state.copyWith(
+            syncReceivedMessages: state.syncReceivedMessages + 1,
+          );
+        }
       }
 
       // Check if message belongs to active room
@@ -611,6 +635,7 @@ class MessageNotifier extends Notifier<MessageState> {
         peer.ipAddress,
         peer.tcpPort,
         peer.deviceName,
+        peer.deviceId,
         isBackground: true,
       );
     }
@@ -656,6 +681,7 @@ class MessageNotifier extends Notifier<MessageState> {
           peer.ipAddress,
           peer.tcpPort,
           peer.deviceName,
+          peer.deviceId,
           isBackground: false,
         );
       } else {
@@ -665,6 +691,7 @@ class MessageNotifier extends Notifier<MessageState> {
           peer.ipAddress,
           peer.tcpPort,
           peer.deviceName,
+          peer.deviceId,
           isBackground: true,
         );
       }
@@ -678,7 +705,8 @@ class MessageNotifier extends Notifier<MessageState> {
   Future<void> _syncWithPeer(
     String peerAddress,
     int peerPort,
-    String peerName, {
+    String peerName,
+    String peerId, {
     required bool isBackground,
   }) async {
     try {
@@ -757,10 +785,19 @@ class MessageNotifier extends Notifier<MessageState> {
 
         // Wait for sync acknowledgment first (5 seconds)
         print('⏳ Waiting for sync acknowledgment from $peerName...');
+
+        // Initialize per-peer sync tracking
+        final expectedMap = Map<String, int>.from(state.peerSyncExpected);
+        final receivedMap = Map<String, int>.from(state.peerSyncReceived);
+        expectedMap[peerId] = 0;
+        receivedMap[peerId] = 0;
+
         state = state.copyWith(
           syncAckReceived: false,
           syncExpectedMessages: 0,
           syncReceivedMessages: 0,
+          peerSyncExpected: expectedMap,
+          peerSyncReceived: receivedMap,
         );
         await Future.delayed(const Duration(seconds: 5));
 
@@ -773,7 +810,7 @@ class MessageNotifier extends Notifier<MessageState> {
         }
 
         // Now wait for messages to arrive, but check periodically if we've received all
-        final expectedCount = state.syncExpectedMessages;
+        final expectedCount = state.peerSyncExpected[peerId] ?? 0;
         print(
           '⏳ Sync acknowledged, waiting for $expectedCount messages from $peerName...',
         );
@@ -783,7 +820,7 @@ class MessageNotifier extends Notifier<MessageState> {
         for (int i = 0; i < 60; i++) {
           await Future.delayed(const Duration(milliseconds: 500));
 
-          final receivedCount = state.syncReceivedMessages;
+          final receivedCount = state.peerSyncReceived[peerId] ?? 0;
           if (receivedCount >= expectedCount) {
             print(
               '✅ All $expectedCount messages received after ${(i + 1) * 500}ms',
@@ -801,11 +838,25 @@ class MessageNotifier extends Notifier<MessageState> {
         }
 
         if (!allReceived) {
-          final receivedCount = state.syncReceivedMessages;
+          final receivedCount = state.peerSyncReceived[peerId] ?? 0;
           print(
             '⚠️ Timeout: Only received $receivedCount/$expectedCount messages after 30 seconds',
           );
         }
+
+        // Clean up per-peer tracking for this sync
+        final cleanupExpectedMap = Map<String, int>.from(
+          state.peerSyncExpected,
+        );
+        final cleanupReceivedMap = Map<String, int>.from(
+          state.peerSyncReceived,
+        );
+        cleanupExpectedMap.remove(peerId);
+        cleanupReceivedMap.remove(peerId);
+        state = state.copyWith(
+          peerSyncExpected: cleanupExpectedMap,
+          peerSyncReceived: cleanupReceivedMap,
+        );
 
         hasMore = false; // Single batch for now
 
@@ -874,15 +925,23 @@ class MessageNotifier extends Notifier<MessageState> {
   void _handleSyncReceived(Map<String, dynamic> ack) {
     try {
       final peerAddress = ack['peer_address'] as String;
+      final peerId = ack['peer_id'] as String?;
       final messageCount = ack['message_count'] as int? ?? 0;
 
       print(
         '✅ Peer $peerAddress acknowledged sync request ($messageCount messages to receive)',
       );
 
+      // Update per-peer expected count
+      final expectedMap = Map<String, int>.from(state.peerSyncExpected);
+      if (peerId != null) {
+        expectedMap[peerId] = messageCount;
+      }
+
       state = state.copyWith(
         syncAckReceived: true,
         syncExpectedMessages: messageCount,
+        peerSyncExpected: expectedMap,
       );
     } catch (e) {
       print('❌ Failed to handle sync acknowledgment: $e');
@@ -1118,17 +1177,24 @@ class MessageNotifier extends Notifier<MessageState> {
         newestTimestamp: newestTimestamp,
       );
 
-      // Send to all discovered peers
+      // Send to peers in the same room
       final discoveryState = ref.read(discoveryProvider);
-      final peers = discoveryState.peers.values;
+      final allPeers = discoveryState.peers.values;
 
-      print('👥 Discovered ${peers.length} peer(s)');
+      // Filter peers who are members of the active room
+      final peersInRoom = allPeers.where((peer) {
+        return peer.rooms.any((room) => room.roomId == networkId);
+      }).toList();
 
-      if (peers.isEmpty) {
-        print('⚠️ No peers to send message to');
+      print(
+        '👥 Discovered ${allPeers.length} peer(s), ${peersInRoom.length} in room "$networkId"',
+      );
+
+      if (peersInRoom.isEmpty) {
+        print('⚠️ No peers in this room to send message to');
       }
 
-      for (final peer in peers) {
+      for (final peer in peersInRoom) {
         print(
           '   Sending to ${peer.deviceName} at ${peer.ipAddress}:${peer.tcpPort}',
         );
