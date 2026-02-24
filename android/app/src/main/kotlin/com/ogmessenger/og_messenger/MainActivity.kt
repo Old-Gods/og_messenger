@@ -44,14 +44,15 @@ class MainActivity : FlutterActivity() {
             acquire()
         }
         
-        // Optional: Keep CPU awake for background operations
+        // Keep CPU awake for background multicast operations
+        // Use indefinite wake lock - will be released when multicast lock is released
         val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "og_messenger::MulticastWakeLock"
         ).apply {
             setReferenceCounted(false)
-            acquire(10*60*1000L) // 10 minutes max
+            acquire() // Acquire indefinitely until explicitly released
         }
     }
 

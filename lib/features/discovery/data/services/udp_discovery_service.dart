@@ -13,6 +13,17 @@ class UdpDiscoveryService {
   RawDatagramSocket? _udpSocket;
   Timer? _beaconTimer;
   Timer? _cleanupTimer;
+  Timer? _healthCheckTimer;
+  Timer? _multicastRefreshTimer;
+  DateTime? _lastPacketReceived;
+  int _packetsReceived = 0;
+  int _beaconsSent = 0;
+  NetworkInterface? _selectedInterface;
+  InternetAddress? _multicastAddress;
+
+  // For rate calculation
+  int _prevBeaconsSent = 0;
+  int _prevPacketsReceived = 0;
 
   final Map<String, Peer> _discoveredPeers = {};
   final StreamController<Map<String, Peer>> _peerController =
@@ -136,15 +147,15 @@ class UdpDiscoveryService {
         InternetAddress.anyIPv4,
         NetworkConstants.multicastPort,
         reuseAddress: true,
-        reusePort: true,
+        reusePort:
+            true, // Platform.isMacOS || Platform.isWindows || Platform.isLinux,
       );
       print('✅ UDP socket bound to 0.0.0.0:${NetworkConstants.multicastPort}');
 
       // Join multicast group on specific interface
-      final multicastAddress = InternetAddress(
-        NetworkConstants.multicastAddress,
-      );
-      _udpSocket!.joinMulticast(multicastAddress, selectedInterface);
+      _multicastAddress = InternetAddress(NetworkConstants.multicastAddress);
+      _selectedInterface = selectedInterface;
+      _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
       print(
         '✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}',
       );
@@ -173,6 +184,19 @@ class UdpDiscoveryService {
       _cleanupTimer = Timer.periodic(
         const Duration(seconds: 5),
         (_) => _cleanupExpiredPeers(),
+      );
+
+      // Start health check timer to monitor socket activity
+      _healthCheckTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _checkSocketHealth(),
+      );
+
+      // Start multicast membership refresh timer
+      // Re-join every 4 minutes to prevent IGMP membership expiration
+      _multicastRefreshTimer = Timer.periodic(
+        const Duration(minutes: 4),
+        (_) => _refreshMulticastMembership(),
       );
 
       _isRunning = true;
@@ -265,6 +289,7 @@ class UdpDiscoveryService {
         InternetAddress(NetworkConstants.multicastAddress),
         NetworkConstants.multicastPort,
       );
+      _beaconsSent++;
     } catch (e) {
       print('❌ Failed to broadcast beacon: $e');
       _errorController.add('Failed to broadcast beacon: $e');
@@ -276,6 +301,8 @@ class UdpDiscoveryService {
     if (event == RawSocketEvent.read) {
       final datagram = _udpSocket?.receive();
       if (datagram != null) {
+        _packetsReceived++;
+        _lastPacketReceived = DateTime.now();
         _handleBeacon(datagram);
       }
     }
@@ -313,6 +340,103 @@ class UdpDiscoveryService {
       _peerController.add(Map.unmodifiable(_discoveredPeers));
     } catch (e) {
       _errorController.add('Failed to parse beacon: $e');
+    }
+  }
+
+  /// Refresh multicast group membership to prevent IGMP timeout
+  void _refreshMulticastMembership() {
+    if (!_isRunning ||
+        _udpSocket == null ||
+        _multicastAddress == null ||
+        _selectedInterface == null) {
+      return;
+    }
+
+    try {
+      print('🔄 Refreshing multicast group membership...');
+
+      // Leave the multicast group
+      _udpSocket!.leaveMulticast(_multicastAddress!, _selectedInterface!);
+
+      // Small delay to ensure leave is processed at OS level
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!_isRunning || _udpSocket == null) return;
+
+        try {
+          // Reconfigure socket before rejoining
+          _udpSocket!.broadcastEnabled = true;
+
+          // Rejoin the multicast group
+          _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
+
+          // Reapply multicast settings to ensure they're active
+          _udpSocket!.setRawOption(
+            RawSocketOption.fromInt(0, 33, 2),
+          ); // IP_MULTICAST_TTL
+          _udpSocket!.multicastLoopback = true;
+
+          print('✅ Multicast group membership refreshed successfully');
+        } catch (e) {
+          print('⚠️ Failed to rejoin multicast group: $e');
+          _errorController.add('Failed to rejoin multicast: $e');
+        }
+      });
+    } catch (e) {
+      print('⚠️ Failed to leave multicast group: $e');
+      _errorController.add('Failed to leave multicast: $e');
+    }
+  }
+
+  /// Check socket health and log diagnostics
+  void _checkSocketHealth() {
+    if (!_isRunning) return;
+
+    final now = DateTime.now();
+    final timeSinceLastPacket = _lastPacketReceived != null
+        ? now.difference(_lastPacketReceived!)
+        : null;
+
+    // Calculate counts since last check
+    final beaconsSinceLastCheck = _beaconsSent - _prevBeaconsSent;
+    final packetsSinceLastCheck = _packetsReceived - _prevPacketsReceived;
+
+    // Update previous values
+    _prevBeaconsSent = _beaconsSent;
+    _prevPacketsReceived = _packetsReceived;
+
+    print('📊 UDP Discovery Health Check:');
+    print('   Beacons sent: $beaconsSinceLastCheck');
+    print('   Packets received: $packetsSinceLastCheck');
+    print('   Active peers: ${_discoveredPeers.length}');
+    if (timeSinceLastPacket != null) {
+      print('   Last packet: ${timeSinceLastPacket.inSeconds}s ago');
+    } else {
+      print('   Last packet: Never');
+    }
+
+    // Detect loopback-only mode: receiving packets but no active peers
+    // This suggests we're only receiving our own beacons, not from other devices
+    if (packetsSinceLastCheck > 0 &&
+        _discoveredPeers.isEmpty &&
+        beaconsSinceLastCheck > 0) {
+      print(
+        '⚠️ Loopback-only mode detected - packets received but no peers. '
+        'Triggering multicast refresh...',
+      );
+      _refreshMulticastMembership();
+    }
+
+    // Warn if no packets received in 15 seconds but we're broadcasting
+    if (timeSinceLastPacket != null &&
+        timeSinceLastPacket.inSeconds > 15 &&
+        _beaconsSent > 0) {
+      print(
+        '⚠️ UDP socket may be dead - no packets in ${timeSinceLastPacket.inSeconds}s',
+      );
+      _errorController.add(
+        'Warning: No UDP packets received in ${timeSinceLastPacket.inSeconds} seconds. '
+        'Multicast may not be working.',
+      );
     }
   }
 
@@ -361,6 +485,12 @@ class UdpDiscoveryService {
 
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
+
+    _healthCheckTimer?.cancel();
+    _healthCheckTimer = null;
+
+    _multicastRefreshTimer?.cancel();
+    _multicastRefreshTimer = null;
 
     // Close UDP socket
     _udpSocket?.close();

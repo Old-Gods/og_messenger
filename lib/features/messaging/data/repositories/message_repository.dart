@@ -47,6 +47,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -66,6 +67,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -90,6 +92,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -114,6 +117,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -133,6 +137,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -155,6 +160,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: schema.senderId == localDeviceId,
+        roomId: schema.roomId,
       );
     }).toList();
   }
@@ -191,6 +197,7 @@ class MessageRepository {
         senderName: schema.senderName,
         content: schema.content,
         isOutgoing: false, // Not relevant for duplicate check
+        roomId: schema.roomId,
       );
     } catch (e) {
       return null;

@@ -446,6 +446,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         ? discoveryNotifier.getOnlineMembersForRoom(activeRoom.roomId)
         : <dynamic>[];
 
+    // Convert to Set of device IDs for efficient membership checks in message bubbles
+    final onlineMemberIds = onlineMembers
+        .map((peer) => peer.deviceId as String)
+        .toSet();
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -611,6 +616,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       return _MessageBubble(
                         message: message,
                         isOwn: message.senderId == settings.deviceId,
+                        onlineMemberIds: onlineMemberIds,
                       );
                     },
                   ),
@@ -683,8 +689,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 class _MessageBubble extends ConsumerWidget {
   final dynamic message;
   final bool isOwn;
+  final Set<String> onlineMemberIds;
 
-  const _MessageBubble({required this.message, required this.isOwn});
+  const _MessageBubble({
+    required this.message,
+    required this.isOwn,
+    required this.onlineMemberIds,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -693,7 +704,31 @@ class _MessageBubble extends ConsumerWidget {
 
     // Watch discovery state to check peer connection status
     final discoveryState = ref.watch(discoveryProvider);
-    final isConnected = discoveryState.peers.containsKey(message.senderId);
+
+    // Determine three-state status: online (green), offline (orange), not a member (grey)
+    final isOnline = onlineMemberIds.contains(message.senderId);
+    final isDiscoverable = discoveryState.peers.containsKey(message.senderId);
+    final isOffline = !isOnline && !isDiscoverable;
+
+    // Determine indicator color and tooltip
+    final Color indicatorColor;
+    final Color indicatorOutlineColor;
+    final String tooltipMessage;
+
+    if (isOnline) {
+      indicatorColor = Colors.green;
+      indicatorOutlineColor = Colors.green.shade800;
+      tooltipMessage = 'Online';
+    } else if (isOffline) {
+      indicatorColor = Colors.orange;
+      indicatorOutlineColor = Colors.orange.shade800;
+      tooltipMessage = 'Offline';
+    } else {
+      // isNotMember
+      indicatorColor = Colors.grey;
+      indicatorOutlineColor = Colors.grey.shade700;
+      tooltipMessage = 'Not a room member';
+    }
 
     // Watch the color assignments map
     final colorAssignments = ref.watch(colorAssignmentProvider);
@@ -750,24 +785,21 @@ class _MessageBubble extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Darker outline circle
-                        Icon(
-                          Icons.circle,
-                          size: 12,
-                          color: isConnected
-                              ? Colors.green.shade800
-                              : Colors.grey.shade700,
-                        ),
-                        // Main filled circle
-                        Icon(
-                          Icons.circle,
-                          size: 10,
-                          color: isConnected ? Colors.green : Colors.grey,
-                        ),
-                      ],
+                    Tooltip(
+                      message: tooltipMessage,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Darker outline circle
+                          Icon(
+                            Icons.circle,
+                            size: 12,
+                            color: indicatorOutlineColor,
+                          ),
+                          // Main filled circle
+                          Icon(Icons.circle, size: 10, color: indicatorColor),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 4),
                     Text(

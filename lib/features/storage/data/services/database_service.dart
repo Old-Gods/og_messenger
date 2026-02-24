@@ -104,7 +104,7 @@ class DatabaseService {
       return await db.insert(
         MessageSchema.tableName,
         message.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: ConflictAlgorithm.abort,
       );
     } catch (e) {
       // Handle unique constraint violations gracefully
@@ -454,6 +454,17 @@ class DatabaseService {
   Future<void> close() async {
     final db = await database;
     await db.close();
+    _database = null;
+  }
+
+  /// Delete the database file (for testing)
+  Future<void> deleteDatabase() async {
+    if (_database != null) {
+      await close();
+    }
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, AppConstants.databaseName);
+    await databaseFactory.deleteDatabase(path);
     _database = null;
   }
 }
