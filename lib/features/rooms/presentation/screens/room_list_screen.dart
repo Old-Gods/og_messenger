@@ -304,9 +304,12 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   /// Request to join a room
   void _requestJoinRoom(String roomId) {
     ref.read(roomProvider.notifier).requestJoinRoom(roomId);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Sending join request...')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sending join request...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   /// Leave a room
@@ -316,9 +319,12 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
       ref: ref,
       roomId: roomId,
       onLeave: () {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Left room')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Left room'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       },
     );
   }

@@ -56,12 +56,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Name updated successfully'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
-            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
-          ),
+          SnackBar(content: const Text('Name updated successfully')),
         );
       }
     } catch (e) {
@@ -69,8 +64,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update name: $e'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
             action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
           ),
         );
@@ -124,12 +117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(settingsProvider.notifier).setRetentionDays(newDays);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Retention updated to $newDays days'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
-            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
-          ),
+          SnackBar(content: Text('Retention updated to $newDays days')),
         );
       }
     }
@@ -160,14 +148,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true) {
       await ref.read(messageProvider.notifier).clearAllMessages();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('All messages cleared'),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
-            action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: const Text('All messages cleared')));
       }
     }
   }

@@ -111,8 +111,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             SnackBar(
               content: const Text('Failed to start messaging server'),
               backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.only(top: 80, left: 16, right: 16),
               action: SnackBarAction(
                 label: 'Dismiss',
                 textColor: Colors.white,
@@ -205,6 +203,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             'Message too large: ${(messageBytes / 1024).toStringAsFixed(1)}KB (max: ${NetworkConstants.maxMessageSizeBytes / 1024}KB)',
           ),
           action: SnackBarAction(label: 'Dismiss', onPressed: () {}),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
