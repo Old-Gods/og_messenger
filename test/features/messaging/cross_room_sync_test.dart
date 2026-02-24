@@ -25,14 +25,19 @@ void main() {
     setUp(() async {
       TestHelpers.setupMockSharedPreferences();
 
-      // Initialize services
+      // Clean up any existing database first
+      await DatabaseService.instance.deleteDatabase();
+
+      // Initialize services with fresh database
       database = DatabaseService.instance;
       repository = MessageRepository(database: database);
     });
 
     tearDown(() async {
-      // Clean up
+      // Clean up - close and reset the database
       await database.close();
+      // Force reset of singleton for next test
+      await DatabaseService.instance.deleteDatabase();
     });
 
     test('Messages from different rooms are not cross-contaminated', () async {
