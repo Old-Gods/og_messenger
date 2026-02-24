@@ -136,7 +136,7 @@ class UdpDiscoveryService {
         InternetAddress.anyIPv4,
         NetworkConstants.multicastPort,
         reuseAddress: true,
-        reusePort: true,
+        reusePort: Platform.isMacOS || Platform.isWindows || Platform.isLinux,
       );
       print('✅ UDP socket bound to 0.0.0.0:${NetworkConstants.multicastPort}');
 
