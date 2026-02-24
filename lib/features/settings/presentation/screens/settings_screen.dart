@@ -123,38 +123,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _showClearMessagesDialog() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear All Messages'),
-        content: const Text(
-          'Are you sure you want to delete all messages? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await ref.read(messageProvider.notifier).clearAllMessages();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: const Text('All messages cleared')));
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -278,18 +246,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             leading: const Icon(Icons.message),
             title: const Text('Total Messages'),
             subtitle: Text('${messageState.messages.length} messages'),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: ElevatedButton.icon(
-              onPressed: _showClearMessagesDialog,
-              icon: const Icon(Icons.delete_sweep),
-              label: const Text('Clear All Messages'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-            ),
           ),
           const Divider(),
 
