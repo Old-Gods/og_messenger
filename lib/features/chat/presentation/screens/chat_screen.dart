@@ -367,7 +367,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               ),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(dialogContext);
+                  // Don't call Navigator.pop here - the Consumer above
+                  // automatically closes the dialog when the request is removed
                   ref
                       .read(roomProvider.notifier)
                       .acceptJoinRequest(request.requestId);
