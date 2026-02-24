@@ -14,9 +14,16 @@ class UdpDiscoveryService {
   Timer? _beaconTimer;
   Timer? _cleanupTimer;
   Timer? _healthCheckTimer;
+  Timer? _multicastRefreshTimer;
   DateTime? _lastPacketReceived;
   int _packetsReceived = 0;
   int _beaconsSent = 0;
+  NetworkInterface? _selectedInterface;
+  InternetAddress? _multicastAddress;
+
+  // For rate calculation
+  int _prevBeaconsSent = 0;
+  int _prevPacketsReceived = 0;
 
   final Map<String, Peer> _discoveredPeers = {};
   final StreamController<Map<String, Peer>> _peerController =
@@ -145,10 +152,9 @@ class UdpDiscoveryService {
       print('✅ UDP socket bound to 0.0.0.0:${NetworkConstants.multicastPort}');
 
       // Join multicast group on specific interface
-      final multicastAddress = InternetAddress(
-        NetworkConstants.multicastAddress,
-      );
-      _udpSocket!.joinMulticast(multicastAddress, selectedInterface);
+      _multicastAddress = InternetAddress(NetworkConstants.multicastAddress);
+      _selectedInterface = selectedInterface;
+      _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
       print(
         '✅ Joined multicast group ${NetworkConstants.multicastAddress} on interface ${selectedInterface.name}',
       );
@@ -183,6 +189,13 @@ class UdpDiscoveryService {
       _healthCheckTimer = Timer.periodic(
         const Duration(seconds: 30),
         (_) => _checkSocketHealth(),
+      );
+
+      // Start multicast membership refresh timer
+      // Re-join every 4 minutes to prevent IGMP membership expiration
+      _multicastRefreshTimer = Timer.periodic(
+        const Duration(minutes: 4),
+        (_) => _refreshMulticastMembership(),
       );
 
       _isRunning = true;
@@ -329,6 +342,26 @@ class UdpDiscoveryService {
     }
   }
 
+  /// Refresh multicast group membership to prevent IGMP timeout
+  void _refreshMulticastMembership() {
+    if (!_isRunning ||
+        _udpSocket == null ||
+        _multicastAddress == null ||
+        _selectedInterface == null) {
+      return;
+    }
+
+    try {
+      // Leave and rejoin the multicast group
+      _udpSocket!.leaveMulticast(_multicastAddress!, _selectedInterface!);
+      _udpSocket!.joinMulticast(_multicastAddress!, _selectedInterface!);
+      print('🔄 Refreshed multicast group membership');
+    } catch (e) {
+      print('⚠️ Failed to refresh multicast membership: $e');
+      _errorController.add('Failed to refresh multicast membership: $e');
+    }
+  }
+
   /// Check socket health and log diagnostics
   void _checkSocketHealth() {
     if (!_isRunning) return;
@@ -338,9 +371,17 @@ class UdpDiscoveryService {
         ? now.difference(_lastPacketReceived!)
         : null;
 
+    // Calculate counts since last check
+    final beaconsSinceLastCheck = _beaconsSent - _prevBeaconsSent;
+    final packetsSinceLastCheck = _packetsReceived - _prevPacketsReceived;
+
+    // Update previous values
+    _prevBeaconsSent = _beaconsSent;
+    _prevPacketsReceived = _packetsReceived;
+
     print('📊 UDP Discovery Health Check:');
-    print('   Beacons sent: $_beaconsSent');
-    print('   Packets received: $_packetsReceived');
+    print('   Beacons sent: $beaconsSinceLastCheck');
+    print('   Packets received: $packetsSinceLastCheck');
     print('   Active peers: ${_discoveredPeers.length}');
     if (timeSinceLastPacket != null) {
       print('   Last packet: ${timeSinceLastPacket.inSeconds}s ago');
@@ -410,6 +451,9 @@ class UdpDiscoveryService {
 
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
+
+    _multicastRefreshTimer?.cancel();
+    _multicastRefreshTimer = null;
 
     // Close UDP socket
     _udpSocket?.close();
