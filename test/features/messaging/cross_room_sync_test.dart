@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:og_messenger/features/messaging/domain/entities/message.dart';
 import 'package:og_messenger/features/storage/data/services/database_service.dart';
 import 'package:og_messenger/features/messaging/data/repositories/message_repository.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../../helpers/test_helpers.dart';
 
 /// Integration tests for cross-room message synchronization.
@@ -11,6 +12,12 @@ import '../../helpers/test_helpers.dart';
 /// 2. Sync responses filter messages by the requested room_id
 /// 3. Duplicate detection works correctly within room boundaries
 void main() {
+  // Initialize FFI for testing
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   group('Cross-Room Sync Integration Tests', () {
     late DatabaseService database;
     late MessageRepository repository;
