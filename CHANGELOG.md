@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.0.0](https://github.com/Old-Gods/og_messenger/compare/v1.2.0...v2.0.0) (2026-02-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* Rooms are no-longer based on wifi ssid. Your old rooms will no longer work
+
+### Features
+
+* add new room images and update asset references in chat and room list screens ([f16d202](https://github.com/Old-Gods/og_messenger/commit/f16d2022e7810d380b5ac826fd2ec5cc23d26752))
+* add no messages images for empty state in chat screen ([541c578](https://github.com/Old-Gods/og_messenger/commit/541c5784225b5c837dede9a2a47ab66150f5864e))
+* add request resolved notification handling and stream ([849cbd0](https://github.com/Old-Gods/og_messenger/commit/849cbd04227eed1dbe6c3fc9b4d503f3524e91ba))
+* add themed empty state icon for room list screen ([9baf4fb](https://github.com/Old-Gods/og_messenger/commit/9baf4fb9f0d218441ef1dc6e9d39100b76b87169))
+* enhance snackbar behavior and styling across multiple screens ([427c1e6](https://github.com/Old-Gods/og_messenger/commit/427c1e68151f166d5388563c5c9983035669187d))
+* implement join request dialog with accept and reject options ([c4d8a6a](https://github.com/Old-Gods/og_messenger/commit/c4d8a6a83c7b3629b214616296fffdfd24e9b1cc))
+* implement per-room notification channels for messages ([857316c](https://github.com/Old-Gods/og_messenger/commit/857316c00a7abf079b4d05f2c65ae111480a6ab2))
+* implement reusable dialog for leaving a room ([5a12a6b](https://github.com/Old-Gods/og_messenger/commit/5a12a6bf1cc7721cdd86ca9752b30e31be25a23e))
+* implement room ID handling in notifications and navigation ([45abf75](https://github.com/Old-Gods/og_messenger/commit/45abf75a58a5caca6ef6effba9e1214eb0e06ef8))
+* **messaging:** implement message pagination and initial load functionality ([527b422](https://github.com/Old-Gods/og_messenger/commit/527b422c432a87903f697aaff8cbedb428db30a7))
+* **sync:** enhance message sync functionality with acknowledgment and pagination ([366eb2a](https://github.com/Old-Gods/og_messenger/commit/366eb2ac1278a613bc5914f40a0bf71e37f9967c))
+* **tcp:** implement message encryption and decryption based on room keys ([d33287f](https://github.com/Old-Gods/og_messenger/commit/d33287f60192cfdd396a6de811464df437a122fb))
+* update username prompt screen UI and add image assets ([dc89638](https://github.com/Old-Gods/og_messenger/commit/dc896382739df4272a6e380e787527d13520b5af))
+
+
+### Bug Fixes
+
+* change notificationDetails declaration to final for consistency ([8ef23a5](https://github.com/Old-Gods/og_messenger/commit/8ef23a5617703ff8a55c0cfc88fca496d1bf88fc))
+* enhance message handling with room ID support and improve decryption error handling ([93338aa](https://github.com/Old-Gods/og_messenger/commit/93338aa9e241083a408cfc727452d5e3494a42bf))
+* enhance message sync tracking with per-peer expected and received counts ([05d076e](https://github.com/Old-Gods/og_messenger/commit/05d076ee3f72cc7509b039588e67ff82276a72e4))
+* implement duplicate message checking in message processing ([f43c5d4](https://github.com/Old-Gods/og_messenger/commit/f43c5d4445d70937dd8127df7f870b6d037a5f76))
+* **messaging:** message sync with peers ([0885dd1](https://github.com/Old-Gods/og_messenger/commit/0885dd1f45cb9699dc1b6c81bc6f74a1edb54dd0))
+* **network:** implement network ID refresh on macOS location permission grant ([9d9e4ed](https://github.com/Old-Gods/og_messenger/commit/9d9e4ed6ad27b52854150ba58977cc14d7a58dc9))
+* notification logic based on active room and app state ([ec7e93e](https://github.com/Old-Gods/og_messenger/commit/ec7e93ee415d1b89d13c2d868a4488cd991bd960))
+* prevent manual dialog closure on join request acceptance ([c83ed03](https://github.com/Old-Gods/og_messenger/commit/c83ed033b4daee43a288957cad1546fa78d44b38))
+* remove ios unneccessary capabilities ([ebb0352](https://github.com/Old-Gods/og_messenger/commit/ebb0352938f2e3ae9584b5c3d42802205c50d842))
+* replace SnackBar with Flushbar for improved message display ([8025cf3](https://github.com/Old-Gods/og_messenger/commit/8025cf3f9c42935f33242503f376e1398bbdb141))
+* snackbars to dissapear automatically ([b85a836](https://github.com/Old-Gods/og_messenger/commit/b85a8366dd2aab043c57b8c6e3ce378adb85431c))
+* update join request dialog to handle pending requests dynamically ([f2fcb76](https://github.com/Old-Gods/og_messenger/commit/f2fcb76cb3e60083fc0f1b7b71c88cc24d07a6b8))
+
+
+### Code Refactoring
+
+* setup screen and database schema for multi-room architecture ([3a8cc09](https://github.com/Old-Gods/og_messenger/commit/3a8cc095e4e90acc347f69352753c5dd2e63c0f9))
+
 ## [1.2.0](https://github.com/Old-Gods/og_messenger/compare/v1.1.0...v1.2.0) (2026-02-22)
 
 
