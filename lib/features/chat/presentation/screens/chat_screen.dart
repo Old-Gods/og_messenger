@@ -709,7 +709,6 @@ class _MessageBubble extends ConsumerWidget {
     final isOnline = onlineMemberIds.contains(message.senderId);
     final isDiscoverable = discoveryState.peers.containsKey(message.senderId);
     final isOffline = !isOnline && !isDiscoverable;
-    final isNotMember = !isOnline && isDiscoverable;
 
     // Determine indicator color and tooltip
     final Color indicatorColor;

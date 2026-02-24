@@ -199,6 +199,7 @@ class TcpServerService {
           'address': socket.remoteAddress.address,
           'port': json['tcp_port'] as int,
           'since_timestamp': json['since_timestamp'] as int,
+          'room_id': json['room_id'] as String?,
         });
         return;
       }
