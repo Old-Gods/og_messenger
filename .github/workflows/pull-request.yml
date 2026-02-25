@@ -24,5 +24,7 @@ jobs:
   pr-build:
     needs: [pr-prepare, pr-test]
     uses: ./.github/workflows/build.yml
+    secrets: inherit
     with:
+      author-is-collaborator: github.event.pull_request.author_association == 'COLLABORATOR'
       version: ${{ needs.pr-prepare.outputs.version }}

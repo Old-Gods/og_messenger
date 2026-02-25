@@ -1,0 +1,15 @@
+name: Build APK
+description: Builds an installable APK for android users
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        flutter build apk --release
+        mv build/app/outputs/flutter-apk/app-release.apk "${{ inputs.filename }}"

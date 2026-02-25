@@ -3,10 +3,28 @@ name: Build
 on:
   workflow_call:
     inputs:
+      author-is-collaborator:
+        default: true
+        description: Has the author, of this commit, a collaborator of this repository?
+        required: false
+        type: boolean
       version:
         description: A build version to add to the name
         required: true
         type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        description: Base64 encoded version of your keystore file
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        description: Your keystore password
+        required: true
+      ANDROID_KEY_PASSWORD:
+        description: Your key password
+        required: true
+      ANDROID_KEY_ALIAS:
+        description: The key alias to use
+        required: true
 
 jobs:
   build-android:
@@ -25,35 +43,30 @@ jobs:
         with:
           channel: "stable"
           cache: true
-      - name: configure android signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
-          cat > android/key.properties << EOF
-          storePassword=$KEYSTORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
-          storeFile=upload-keystore.jks
-          EOF
+      - if: inputs.author-is-collaborator
+        uses: ./.github/actions/configure-android-signing
+        with:
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
       - run: flutter pub get
-      - run: flutter build apk --release
-      - run: mv build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
-      - if: github.actor != 'dependabot[bot]'
+      - uses: ./.github/actions/build-apk
+        with:
+          filename: ${{ env.APK_NAME }}
+      - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
           name: build-apk
           path: ${{ env.APK_NAME }}
-      - run: flutter build appbundle --release
-      - run: mv build/app/outputs/bundle/release/app-release.aab "$AAB_NAME"
-      - if: github.actor != 'dependabot[bot]'
-        uses: actions/upload-artifact@v6
-        with:
-          name: build-aab
-          path: ${{ env.AAB_NAME }}
+      # - uses: ./.github/actions/build-aap
+      #   with:
+      #     filename: ${{ env.AAB_NAME }}
+      # - if: inputs.author-is-collaborator
+      #   uses: actions/upload-artifact@v6
+      #   with:
+      #     name: build-aab
+      #     path: ${{ env.AAB_NAME }}
 
   build-ios:
     runs-on: macos-latest
@@ -70,7 +83,7 @@ jobs:
       - run: | # shell
           cd build/ios/iphoneos
           zip -r "../../../$BUILD_NAME" Runner.app
-      - if: github.actor != 'dependabot[bot]'
+      - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
           name: build-ios
@@ -94,7 +107,7 @@ jobs:
       - run: | # shell
           cd build/linux/x64/release/bundle
           tar -czf "../../../../../$BUILD_NAME" *
-      - if: github.actor != 'dependabot[bot]'
+      - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
           name: build-linux
@@ -119,7 +132,7 @@ jobs:
             -ov \
             -format UDZO \
             "${{ env.BUILD_NAME }}"
-      - if: github.actor != 'dependabot[bot]'
+      - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
           name: build-macos
@@ -138,7 +151,7 @@ jobs:
       - run: flutter pub get
       - run: flutter build windows --release
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
-      - if: github.actor != 'dependabot[bot]'
+      - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
           name: build-windows
