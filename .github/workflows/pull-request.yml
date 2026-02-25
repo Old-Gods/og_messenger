@@ -26,5 +26,5 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      author-is-collaborator: github.event.pull_request.author_association == 'COLLABORATOR'
+      author-is-collaborator: ${{ github.event.pull_request.author_association == 'COLLABORATOR' }}
       version: ${{ needs.pr-prepare.outputs.version }}
