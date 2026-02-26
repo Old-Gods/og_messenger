@@ -8,7 +8,7 @@
 PRODUCT_NAME = OG Messenger
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.ogmessenger.ogMessenger
+PRODUCT_BUNDLE_IDENTIFIER = com.oldgods.ogmessenger
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.ogmessenger. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.oldgods. All rights reserved.

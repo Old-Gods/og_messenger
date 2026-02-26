@@ -1,0 +1,36 @@
+name: Configure Android Signing
+
+description: Creates a key.properties file ready for signing android builds
+
+inputs:
+  keystore-base64:
+    description: Base64 encoded version of your keystore file
+    required: true
+  keystore-password:
+    description: Your keystore password
+    required: true
+  key-password:
+    description: Your key password
+    required: true
+  key-alias:
+    description: The key alias to use
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        KEYSTORE_BASE64: ${{ inputs.keystore-base64 }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        KEYSTORE_PATH: ${{ github.workspace }}/android/app/upload-keystore.jks
+        KEY_PASSWORD: ${{ inputs.key-password }}
+        KEY_ALIAS: ${{ inputs.key-alias }}
+      run: |
+        echo "$KEYSTORE_BASE64" | base64 --decode > $KEYSTORE_PATH
+        cat > android/key.properties << EOF
+        storePassword=$KEYSTORE_PASSWORD
+        keyPassword=$KEY_PASSWORD
+        keyAlias=$KEY_ALIAS
+        storeFile=$KEYSTORE_PATH
+        EOF

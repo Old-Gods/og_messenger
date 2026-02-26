@@ -1,0 +1,15 @@
+name: Build AAB
+description: Builds an uploadable AAB for android marketplaces
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        flutter build appbundle --release
+        mv build/app/outputs/bundle/release/app-release.aab "${{ inputs.filename }}"

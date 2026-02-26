@@ -13,6 +13,7 @@ jobs:
     outputs:
       version: ${{ steps.set-version.outputs.version }}
     steps:
+      - run: echo "author_association=${{ github.event.pull_request.author_association }}"
       - id: set-version
         run: |
           VERSION="${{ github.head_ref }}"
@@ -24,5 +25,7 @@ jobs:
   pr-build:
     needs: [pr-prepare, pr-test]
     uses: ./.github/workflows/build.yml
+    secrets: inherit
     with:
+      author-is-collaborator: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
       version: ${{ needs.pr-prepare.outputs.version }}

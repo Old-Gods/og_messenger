@@ -7,9 +7,7 @@ class MulticastLockService {
 
   MulticastLockService._();
 
-  static const platform = MethodChannel(
-    'com.ogmessenger.og_messenger/multicast',
-  );
+  static const platform = MethodChannel('com.oldgods.ogmessenger/multicast');
 
   bool _isAcquired = false;
 

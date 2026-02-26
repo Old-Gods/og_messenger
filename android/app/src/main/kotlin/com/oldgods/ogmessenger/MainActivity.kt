@@ -1,4 +1,4 @@
-package com.ogmessenger.og_messenger
+package com.oldgods.ogmessenger
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -8,7 +8,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.ogmessenger.og_messenger/multicast"
+    private val CHANNEL = "com.oldgods.ogmessenger/multicast"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
 

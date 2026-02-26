@@ -39,6 +39,7 @@ jobs:
     needs: release-github
     if: ${{ needs.release-github.outputs.release_created }}
     uses: ./.github/workflows/build.yml
+    secrets: inherit
     with:
       version: ${{ needs.release-github.outputs.version }}
 
