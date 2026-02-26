@@ -5,11 +5,14 @@ inputs:
   filename:
     description: The filename to create
     required: true
+  type:
+    default: release
+    description: debug or release
 
 runs:
   using: composite
   steps:
     - shell: bash
       run: |
-        flutter build apk --release
-        mv build/app/outputs/flutter-apk/app-release.apk "${{ inputs.filename }}"
+        flutter build apk --${{ inputs.type }}
+        mv build/app/outputs/flutter-apk/app-${{ inputs.type }}.apk "${{ inputs.filename }}"

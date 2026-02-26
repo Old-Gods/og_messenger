@@ -54,6 +54,7 @@ jobs:
       - uses: ./.github/actions/build-apk
         with:
           filename: ${{ env.APK_NAME }}
+          type: ${{ inputs.author-is-collaborator && 'release' || 'debug' }}
       - if: inputs.author-is-collaborator
         uses: actions/upload-artifact@v6
         with:
