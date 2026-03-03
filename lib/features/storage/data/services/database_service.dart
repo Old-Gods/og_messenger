@@ -6,6 +6,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../rooms/domain/entities/room.dart';
 import '../../../rooms/domain/entities/room_membership.dart';
 import '../../../rooms/domain/entities/join_request.dart';
+import '../../../rooms/domain/entities/invite_request.dart';
 
 /// SQLite database service for managing message and room storage
 class DatabaseService {
@@ -92,6 +93,19 @@ class DatabaseService {
         requester_device_id TEXT NOT NULL,
         requester_name TEXT NOT NULL,
         requester_public_key TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+
+    // Create invite_requests table
+    await db.execute('''
+      CREATE TABLE invite_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invite_id TEXT NOT NULL UNIQUE,
+        room_id TEXT NOT NULL,
+        room_name TEXT NOT NULL,
+        inviter_device_id TEXT NOT NULL,
+        inviter_name TEXT NOT NULL,
         created_at INTEGER NOT NULL
       )
     ''');
@@ -445,6 +459,47 @@ class DatabaseService {
     final db = await database;
     return await db.delete(
       'join_requests',
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+    );
+  }
+
+  /// Upsert (insert or update) an invite request
+  Future<int> upsertInviteRequest(InviteRequest invite) async {
+    final db = await database;
+    return await db.insert(
+      'invite_requests',
+      invite.toJson(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Get all pending invite requests
+  Future<List<InviteRequest>> getInviteRequests() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'invite_requests',
+      orderBy: 'created_at DESC',
+    );
+
+    return List.generate(maps.length, (i) => InviteRequest.fromJson(maps[i]));
+  }
+
+  /// Delete an invite request
+  Future<int> deleteInviteRequest(String inviteId) async {
+    final db = await database;
+    return await db.delete(
+      'invite_requests',
+      where: 'invite_id = ?',
+      whereArgs: [inviteId],
+    );
+  }
+
+  /// Delete all invite requests for a specific room
+  Future<int> deleteInviteRequestsByRoom(String roomId) async {
+    final db = await database;
+    return await db.delete(
+      'invite_requests',
       where: 'room_id = ?',
       whereArgs: [roomId],
     );

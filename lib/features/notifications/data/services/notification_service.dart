@@ -10,13 +10,13 @@ class NotificationService {
 
   bool _initialized = false;
   bool _permissionGranted = false;
-  Function(String roomId)? _onNavigateToRoom;
+  Function(Map<String, dynamic> payload)? _userCallback;
 
   NotificationService._();
 
-  /// Set the navigation callback for handling notification taps
-  void setNavigationCallback(Function(String roomId) callback) {
-    _onNavigateToRoom = callback;
+  /// Set the notification tap callback for handling notification taps
+  void setNavigationCallback(Function(Map<String, dynamic> payload) callback) {
+    _userCallback = callback;
   }
 
   /// Initialize the notification service
@@ -50,10 +50,26 @@ class NotificationService {
 
     await _plugin.initialize(
       settings: initializationSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
     );
 
     _initialized = true;
+  }
+
+  /// Handle notification response from the plugin
+  void _handleNotificationResponse(NotificationResponse response) {
+    if (response.payload == null) return;
+
+    try {
+      final data = jsonDecode(response.payload!);
+
+      if (_userCallback != null) {
+        print('📱 Notification tapped: ${data['type']}');
+        _userCallback!(data);
+      }
+    } catch (e) {
+      print('⚠️ Failed to handle notification tap: $e');
+    }
   }
 
   /// Request notification permissions (iOS/macOS)
@@ -224,21 +240,54 @@ class NotificationService {
     );
   }
 
-  /// Handle notification tap
-  void _onNotificationTapped(NotificationResponse response) {
-    if (response.payload == null) return;
+  /// Show a notification for a room invite
+  Future<void> showInviteNotification({
+    required String inviterId,
+    required String inviterName,
+    required String roomId,
+    required String roomName,
+    required String inviteId,
+  }) async {
+    if (!_initialized) await initialize();
 
-    try {
-      final data = jsonDecode(response.payload!);
-      final roomId = data['roomId'] as String?;
+    const androidDetails = AndroidNotificationDetails(
+      'invites',
+      'Room Invites',
+      channelDescription: 'Room invite notifications',
+      importance: Importance.max,
+      priority: Priority.max,
+      showWhen: true,
+    );
 
-      if (roomId != null && _onNavigateToRoom != null) {
-        print('📱 Notification tapped: navigating to room $roomId');
-        _onNavigateToRoom!(roomId);
-      }
-    } catch (e) {
-      print('⚠️ Failed to handle notification tap: $e');
-    }
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const macosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+      macOS: macosDetails,
+    );
+
+    await _plugin.show(
+      id: inviteId.hashCode,
+      title: '📬 Room Invite',
+      body: '$inviterName invited you to $roomName',
+      notificationDetails: notificationDetails,
+      payload: jsonEncode({
+        'type': 'invite',
+        'roomId': roomId,
+        'inviteId': inviteId,
+      }),
+    );
   }
 
   /// Create a notification channel for a room (Android)

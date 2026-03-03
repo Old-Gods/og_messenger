@@ -104,6 +104,41 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
       });
     }
 
+    // Show snackbar for incoming invites
+    if (roomState.receivedInvites.isNotEmpty) {
+      // Get the most recent invite
+      final invites = roomState.receivedInvites.values.toList();
+      invites.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final latestInvite = invites.first;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
+              ),
+              duration: const Duration(seconds: 8),
+              action: SnackBarAction(
+                label: 'Accept',
+                onPressed: () {
+                  ref
+                      .read(roomProvider.notifier)
+                      .acceptInvite(latestInvite.inviteId);
+                },
+              ),
+              // Add a custom dismiss action for "Ignore"
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+
+          // Note: For a true "Ignore" button alongside "Accept", we'd need a custom widget
+          // For now, swiping dismisses with ignore, and the tap button accepts
+        }
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Rooms'),

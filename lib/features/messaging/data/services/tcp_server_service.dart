@@ -35,6 +35,8 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _requestResolvedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _inviteRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -71,6 +73,10 @@ class TcpServerService {
   /// Stream of request resolved notifications
   Stream<Map<String, dynamic>> get requestResolvedStream =>
       _requestResolvedController.stream;
+
+  /// Stream of invite requests
+  Stream<Map<String, dynamic>> get inviteRequestStream =>
+      _inviteRequestController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -261,6 +267,21 @@ class TcpServerService {
         _requestResolvedController.add({
           'request_id': json['request_id'] as String,
           'room_id': json['room_id'] as String,
+        });
+        return;
+      }
+
+      // Check if this is an invite request
+      if (json['type'] == 'invite_request') {
+        print('📬 Received invite request');
+        _inviteRequestController.add({
+          'invite_id': json['invite_id'] as String,
+          'room_id': json['room_id'] as String,
+          'room_name': json['room_name'] as String,
+          'inviter_device_id': json['inviter_device_id'] as String,
+          'inviter_name': json['inviter_name'] as String,
+          'peer_address': socket.remoteAddress.address,
+          'peer_port': json['tcp_port'] as int,
         });
         return;
       }
@@ -697,6 +718,45 @@ class TcpServerService {
     }
   }
 
+  /// Send invite request to a peer
+  Future<bool> sendInvite({
+    required String peerAddress,
+    required int peerPort,
+    required String inviteId,
+    required String roomId,
+    required String roomName,
+    required String inviterDeviceId,
+    required String inviterName,
+    required int tcpPort,
+  }) async {
+    try {
+      final invite = {
+        'type': 'invite_request',
+        'invite_id': inviteId,
+        'room_id': roomId,
+        'room_name': roomName,
+        'inviter_device_id': inviterDeviceId,
+        'inviter_name': inviterName,
+        'tcp_port': tcpPort,
+      };
+
+      final inviteJson = jsonEncode(invite);
+      print('📬 Sending invite to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$inviteJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Invite sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send invite to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send invite: $e');
+      return false;
+    }
+  }
+
   /// Stop the TCP server
   Future<void> stop() async {
     if (!_isRunning) return;
@@ -726,5 +786,6 @@ class TcpServerService {
     _joinResponseController.close();
     _typingIndicatorController.close();
     _syncReceivedController.close();
+    _inviteRequestController.close();
   }
 }
