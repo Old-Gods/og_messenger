@@ -23,6 +23,16 @@ void main() {
       } catch (e) {
         // Ignore if database doesn't exist
       }
+
+      // Initialize database by accessing it, then close and reopen
+      // This ensures the database is properly created with write permissions
+      await dbService.database;
+      await Future.delayed(const Duration(milliseconds: 50));
+      await dbService.close();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Re-access to ensure fresh writable connection
+      await dbService.database;
     });
 
     tearDown(() async {
