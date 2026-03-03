@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../../notifications/data/services/notification_service.dart';
+import '../../../core/constants/network_constants.dart';
 import '../domain/entities/message.dart';
 import '../data/repositories/message_repository.dart';
 import '../data/services/tcp_server_service.dart';
@@ -14,7 +15,6 @@ class MessageState {
   final List<Message> messages;
   final bool isLoading;
   final String? error;
-  final Map<String, DateTime> typingPeers; // deviceId -> last typing time
 
   // Pagination fields
   final bool isLoadingMore; // Loading older messages
@@ -45,7 +45,6 @@ class MessageState {
     this.messages = const [],
     this.isLoading = false,
     this.error,
-    this.typingPeers = const {},
     this.isLoadingMore = false,
     this.isLoadingNewer = false,
     this.hasMoreOlder = false,
@@ -69,7 +68,6 @@ class MessageState {
     List<Message>? messages,
     bool? isLoading,
     String? error,
-    Map<String, DateTime>? typingPeers,
     bool? isLoadingMore,
     bool? isLoadingNewer,
     bool? hasMoreOlder,
@@ -92,7 +90,6 @@ class MessageState {
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      typingPeers: typingPeers ?? this.typingPeers,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       isLoadingNewer: isLoadingNewer ?? this.isLoadingNewer,
       hasMoreOlder: hasMoreOlder ?? this.hasMoreOlder,
@@ -114,6 +111,83 @@ class MessageState {
   }
 }
 
+/// Typing indicator state - separate to avoid rebuilding TextField
+class TypingIndicatorState {
+  final Map<String, DateTime> typingPeers; // deviceId -> last typing time
+
+  const TypingIndicatorState({this.typingPeers = const {}});
+
+  TypingIndicatorState copyWith({Map<String, DateTime>? typingPeers}) {
+    return TypingIndicatorState(typingPeers: typingPeers ?? this.typingPeers);
+  }
+}
+
+/// Typing indicator notifier - manages typing state separately from messages
+class TypingIndicatorNotifier extends Notifier<TypingIndicatorState> {
+  Timer? _cleanupTimer;
+
+  @override
+  TypingIndicatorState build() {
+    // Start cleanup timer
+    _cleanupTimer?.cancel();
+    _cleanupTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _cleanupTypingPeers(),
+    );
+
+    // Cancel timer when provider is disposed
+    ref.onDispose(() {
+      _cleanupTimer?.cancel();
+    });
+
+    return const TypingIndicatorState();
+  }
+
+  /// Clean up expired typing indicators
+  void _cleanupTypingPeers() {
+    final now = DateTime.now();
+    final updated = Map<String, DateTime>.from(state.typingPeers);
+    bool needsUpdate = false;
+
+    updated.removeWhere((deviceId, lastTyping) {
+      final shouldRemove =
+          now.difference(lastTyping) > NetworkConstants.typingTimeout;
+      if (shouldRemove) needsUpdate = true;
+      return shouldRemove;
+    });
+
+    if (needsUpdate) {
+      state = state.copyWith(typingPeers: updated);
+    }
+  }
+
+  /// Handle typing indicator from another peer
+  void handleTypingIndicator(String deviceId) {
+    final updated = Map<String, DateTime>.from(state.typingPeers);
+    updated[deviceId] = DateTime.now();
+    state = state.copyWith(typingPeers: updated);
+  }
+
+  /// Clear typing indicator for a specific device (e.g., when they send a message)
+  void clearTypingIndicator(String deviceId) {
+    final updated = Map<String, DateTime>.from(state.typingPeers);
+    if (updated.remove(deviceId) != null) {
+      state = state.copyWith(typingPeers: updated);
+    }
+  }
+
+  /// Clear all typing indicators
+  void clearAll() {
+    state = const TypingIndicatorState();
+  }
+}
+
+/// Provider for typing indicators - separate from message state
+final typingIndicatorProvider =
+    NotifierProvider<TypingIndicatorNotifier, TypingIndicatorState>(
+      () => TypingIndicatorNotifier(),
+    );
+
 /// Message notifier
 class MessageNotifier extends Notifier<MessageState> {
   late MessageRepository _repository;
@@ -121,7 +195,6 @@ class MessageNotifier extends Notifier<MessageState> {
   ProviderSubscription? _peerSubscription;
   final Set<String> _syncedPeers = {};
   bool _isAppInForeground = true;
-  Timer? _typingCleanupTimer;
 
   // Sync tracking
   bool _isFirstPeerDiscovered = false;
@@ -147,6 +220,11 @@ class MessageNotifier extends Notifier<MessageState> {
       _handlePeerChanges(previous?.peers ?? {}, next.peers);
     });
 
+    // Set up typing cleanup timer cancellation on dispose
+    ref.onDispose(() {
+      _peerSubscription?.close();
+    });
+
     // Listen to active room changes - reload messages and sync when room changes
     ref.listen(roomProvider, (previous, next) {
       if (previous?.activeRoomId != next.activeRoomId &&
@@ -162,52 +240,21 @@ class MessageNotifier extends Notifier<MessageState> {
       }
     });
 
-    // Start typing indicator cleanup timer
-    _startTypingCleanupTimer();
-
     // Schedule async load after build completes
     Future.microtask(() => loadInitialMessages());
 
     // Clean up timer when provider is disposed
     ref.onDispose(() {
-      _typingCleanupTimer?.cancel();
+      _peerSubscription?.close();
     });
 
     return const MessageState();
   }
 
-  /// Start periodic cleanup of expired typing indicators
-  void _startTypingCleanupTimer() {
-    _typingCleanupTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _cleanupExpiredTypingIndicators();
-    });
-  }
-
-  /// Remove typing indicators that have expired
-  void _cleanupExpiredTypingIndicators() {
-    final now = DateTime.now();
-    final updated = Map<String, DateTime>.from(state.typingPeers);
-    var needsUpdate = false;
-
-    updated.removeWhere((deviceId, lastTyping) {
-      final isExpired =
-          now.difference(lastTyping) >
-          const Duration(seconds: 5); // Use NetworkConstants.typingTimeout
-      if (isExpired) needsUpdate = true;
-      return isExpired;
-    });
-
-    if (needsUpdate) {
-      state = state.copyWith(typingPeers: updated);
-    }
-  }
-
   /// Handle typing indicator
   void _handleTypingIndicator(Map<String, dynamic> data) {
     final deviceId = data['device_id'] as String;
-    final updated = Map<String, DateTime>.from(state.typingPeers);
-    updated[deviceId] = DateTime.now();
-    state = state.copyWith(typingPeers: updated);
+    ref.read(typingIndicatorProvider.notifier).handleTypingIndicator(deviceId);
   }
 
   /// Update app foreground state
@@ -541,11 +588,10 @@ class MessageNotifier extends Notifier<MessageState> {
         return;
       }
 
-      // Clear typing indicator for this sender
-      final updated = Map<String, DateTime>.from(state.typingPeers);
-      if (updated.remove(message.senderId) != null) {
-        state = state.copyWith(typingPeers: updated);
-      }
+      // Clear typing indicator for this sender (they sent a message)
+      ref
+          .read(typingIndicatorProvider.notifier)
+          .clearTypingIndicator(message.senderId);
 
       print(
         '💾 Saving new message: "${message.content}" from ${message.senderName}',

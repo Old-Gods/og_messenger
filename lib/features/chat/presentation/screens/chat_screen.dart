@@ -430,16 +430,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     );
   }
 
-  String _buildTypingIndicatorText() {
-    final typingPeers = ref.watch(messageProvider).typingPeers;
-    final discoveryState = ref.read(discoveryProvider);
-
+  static String _buildTypingIndicatorText(
+    Map<String, DateTime> typingPeers,
+    Map<String, dynamic> discoveryPeers,
+  ) {
     if (typingPeers.isEmpty) return '';
 
     // Get names of typing peers
     final typingNames = <String>[];
     for (final deviceId in typingPeers.keys) {
-      final peer = discoveryState.peers[deviceId];
+      final peer = discoveryPeers[deviceId];
       if (peer != null) {
         typingNames.add(peer.deviceName);
       }
@@ -673,19 +673,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                   ),
           ),
 
-          // Typing indicator
-          if (_buildTypingIndicatorText().isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                _buildTypingIndicatorText(),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
+          // Typing indicator - separate Consumer to avoid rebuilding TextField
+          Consumer(
+            builder: (context, ref, child) {
+              final typingState = ref.watch(typingIndicatorProvider);
+              final discoveryState = ref.watch(discoveryProvider);
+              final text = _buildTypingIndicatorText(
+                typingState.typingPeers,
+                discoveryState.peers,
+              );
+
+              if (text.isEmpty) return const SizedBox.shrink();
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
                 ),
-              ),
-            ),
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              );
+            },
+          ),
 
           // Message input
           Container(
