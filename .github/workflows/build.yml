@@ -52,7 +52,7 @@ jobs:
           filename: ${{ env.APK_NAME }}
           type: ${{ inputs.author-is-collaborator && 'release' || 'debug' }}
       - if: inputs.author-is-collaborator
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-apk
           path: ${{ env.APK_NAME }}
@@ -60,7 +60,7 @@ jobs:
       #   with:
       #     filename: ${{ env.AAB_NAME }}
       # - if: inputs.author-is-collaborator
-      #   uses: actions/upload-artifact@v6
+      #   uses: actions/upload-artifact@v7
       #   with:
       #     name: build-aab
       #     path: ${{ env.AAB_NAME }}
@@ -81,7 +81,7 @@ jobs:
           cd build/ios/iphoneos
           zip -r "../../../$BUILD_NAME" Runner.app
       - if: inputs.author-is-collaborator
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-ios
           path: ${{ env.BUILD_NAME }}
@@ -105,7 +105,7 @@ jobs:
           cd build/linux/x64/release/bundle
           tar -czf "../../../../../$BUILD_NAME" *
       - if: inputs.author-is-collaborator
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-linux
           path: ${{ env.BUILD_NAME }}
@@ -130,7 +130,7 @@ jobs:
             -format UDZO \
             "${{ env.BUILD_NAME }}"
       - if: inputs.author-is-collaborator
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-macos
           path: ${{ env.BUILD_NAME }}
@@ -149,7 +149,7 @@ jobs:
       - run: flutter build windows --release
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
       - if: inputs.author-is-collaborator
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-windows
           path: ${{ env.BUILD_NAME }}
