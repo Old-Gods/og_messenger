@@ -12,7 +12,6 @@ A serverless, cross-platform LAN messenger for private networks. Built with Flut
 ## Features
 
 - 🌐 **Serverless**: No central server required - works entirely on your local network
-- 💬 **Single Chatroom**: One shared conversation per network for simplicity
 - 🔍 **Auto-Discovery**: Automatically finds other devices using UDP multicast
 - 📱 **Cross-Platform**: Works on Android, iOS, macOS, Windows, and Linux
 - 🔔 **Notifications**: Get notified when messages arrive while app is in background
