@@ -26,7 +26,13 @@ void main() {
       TestHelpers.setupMockSharedPreferences();
 
       // Clean up any existing database first
-      await DatabaseService.instance.deleteDatabase();
+      try {
+        await DatabaseService.instance.deleteDatabase();
+      } catch (e) {
+        // Ignore if database doesn't exist
+      }
+      // Wait for file system to release handles (longer delay for CI)
+      await Future.delayed(const Duration(milliseconds: 300));
 
       // Initialize services with fresh database
       database = DatabaseService.instance;
@@ -35,9 +41,14 @@ void main() {
 
     tearDown(() async {
       // Clean up - close and reset the database
-      await database.close();
-      // Force reset of singleton for next test
-      await DatabaseService.instance.deleteDatabase();
+      try {
+        await database.close();
+        await DatabaseService.instance.deleteDatabase();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+      // Wait for file system to release handles (longer delay for CI)
+      await Future.delayed(const Duration(milliseconds: 300));
     });
 
     test('Messages from different rooms are not cross-contaminated', () async {
