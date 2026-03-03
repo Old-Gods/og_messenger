@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:another_flushbar/flushbar.dart';
 import '../../providers/room_provider.dart';
 import '../../domain/entities/room.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -19,6 +20,7 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   int _previousJoinedRoomsCount = 0;
   bool _isFirstLoad = true;
   final Set<String> _shownInviteIds = {};
+  final Map<String, Flushbar> _activeFlushbars = {};
 
   @override
   void initState() {
@@ -75,6 +77,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
   @override
   void dispose() {
+    // Dismiss any active flushbars
+    for (final flushbar in _activeFlushbars.values) {
+      flushbar.dismiss();
+    }
+    _activeFlushbars.clear();
     super.dispose();
   }
 
@@ -118,65 +125,67 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
+            final flushbar = Flushbar(
+              message:
+                  '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
+              icon: const Icon(Icons.mail_outline, color: Colors.white),
+              duration: null, // Persist until dismissed
+              isDismissible: false, // Require explicit action
+              flushbarPosition: FlushbarPosition.TOP,
+              margin: const EdgeInsets.all(8),
+              borderRadius: BorderRadius.circular(8),
+              backgroundColor: Colors.blue.shade700,
+              mainButton: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      _activeFlushbars.remove(latestInvite.inviteId);
+                      Navigator.of(context).pop();
+                      ref
+                          .read(roomProvider.notifier)
+                          .rejectInvite(latestInvite.inviteId);
+                    },
+                    child: const Text(
+                      'IGNORE',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      _activeFlushbars.remove(latestInvite.inviteId);
+                      Navigator.of(context).pop();
+                      ref
+                          .read(roomProvider.notifier)
+                          .acceptInvite(latestInvite.inviteId);
+                    },
+                    child: const Text(
+                      'ACCEPT',
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ref
-                            .read(roomProvider.notifier)
-                            .rejectInvite(latestInvite.inviteId);
-                      },
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
-                      ),
-                      child: const Text(
-                        'Ignore',
-                        style: TextStyle(color: Colors.black87),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ref
-                            .read(roomProvider.notifier)
-                            .acceptInvite(latestInvite.inviteId);
-                      },
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.green.withValues(alpha: 0.8),
-                      ),
-                      child: const Text(
-                        'Accept',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                duration: const Duration(days: 365),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.all(16),
+                  ),
+                ],
               ),
             );
+            _activeFlushbars[latestInvite.inviteId] = flushbar;
+            flushbar.show(context);
           }
         });
       }
     }
 
-    // Clean up shown invite IDs when invites are removed from state
-    _shownInviteIds.removeWhere(
-      (id) => !roomState.receivedInvites.containsKey(id),
-    );
+    // Clean up shown invite IDs and dismiss flushbars when invites are removed from state
+    _shownInviteIds.removeWhere((id) {
+      final shouldRemove = !roomState.receivedInvites.containsKey(id);
+      if (shouldRemove && _activeFlushbars.containsKey(id)) {
+        _activeFlushbars[id]?.dismiss();
+        _activeFlushbars.remove(id);
+      }
+      return shouldRemove;
+    });
 
     return Scaffold(
       appBar: AppBar(
