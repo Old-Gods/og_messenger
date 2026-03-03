@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:another_flushbar/flushbar.dart';
 import '../../providers/room_provider.dart';
 import '../../domain/entities/room.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -18,6 +19,8 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   bool _servicesInitialized = false;
   int _previousJoinedRoomsCount = 0;
   bool _isFirstLoad = true;
+  final Set<String> _shownInviteIds = {};
+  final Map<String, Flushbar> _activeFlushbars = {};
 
   @override
   void initState() {
@@ -74,6 +77,11 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
 
   @override
   void dispose() {
+    // Dismiss any active flushbars
+    for (final flushbar in _activeFlushbars.values) {
+      flushbar.dismiss();
+    }
+    _activeFlushbars.clear();
     super.dispose();
   }
 
@@ -103,6 +111,81 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
         }
       });
     }
+
+    // Show snackbar for incoming invites (only for new invites)
+    if (roomState.receivedInvites.isNotEmpty) {
+      // Get the most recent invite
+      final invites = roomState.receivedInvites.values.toList();
+      invites.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final latestInvite = invites.first;
+
+      // Only show if we haven't shown this invite before
+      if (!_shownInviteIds.contains(latestInvite.inviteId)) {
+        _shownInviteIds.add(latestInvite.inviteId);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            final flushbar = Flushbar(
+              message:
+                  '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
+              icon: const Icon(Icons.mail_outline, color: Colors.white),
+              duration: null, // Persist until dismissed
+              isDismissible: false, // Require explicit action
+              flushbarPosition: FlushbarPosition.TOP,
+              margin: const EdgeInsets.all(8),
+              borderRadius: BorderRadius.circular(8),
+              backgroundColor: Colors.blue.shade700,
+              mainButton: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      _activeFlushbars.remove(latestInvite.inviteId);
+                      Navigator.of(context).pop();
+                      ref
+                          .read(roomProvider.notifier)
+                          .rejectInvite(latestInvite.inviteId);
+                    },
+                    child: const Text(
+                      'IGNORE',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      _activeFlushbars.remove(latestInvite.inviteId);
+                      Navigator.of(context).pop();
+                      ref
+                          .read(roomProvider.notifier)
+                          .acceptInvite(latestInvite.inviteId);
+                    },
+                    child: const Text(
+                      'ACCEPT',
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+            _activeFlushbars[latestInvite.inviteId] = flushbar;
+            flushbar.show(context);
+          }
+        });
+      }
+    }
+
+    // Clean up shown invite IDs and dismiss flushbars when invites are removed from state
+    _shownInviteIds.removeWhere((id) {
+      final shouldRemove = !roomState.receivedInvites.containsKey(id);
+      if (shouldRemove && _activeFlushbars.containsKey(id)) {
+        _activeFlushbars[id]?.dismiss();
+        _activeFlushbars.remove(id);
+      }
+      return shouldRemove;
+    });
 
     return Scaffold(
       appBar: AppBar(

@@ -35,6 +35,10 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _requestResolvedController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _inviteRequestController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _inviteAcceptResponseController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -71,6 +75,14 @@ class TcpServerService {
   /// Stream of request resolved notifications
   Stream<Map<String, dynamic>> get requestResolvedStream =>
       _requestResolvedController.stream;
+
+  /// Stream of invite requests
+  Stream<Map<String, dynamic>> get inviteRequestStream =>
+      _inviteRequestController.stream;
+
+  /// Stream of invite accept responses (with encrypted AES key)
+  Stream<Map<String, dynamic>> get inviteAcceptResponseStream =>
+      _inviteAcceptResponseController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -262,6 +274,35 @@ class TcpServerService {
           'request_id': json['request_id'] as String,
           'room_id': json['room_id'] as String,
         });
+        return;
+      }
+
+      // Check if this is an invite request
+      if (json['type'] == 'invite_request') {
+        print('📬 Received invite request');
+        _inviteRequestController.add({
+          'invite_id': json['invite_id'] as String,
+          'room_id': json['room_id'] as String,
+          'room_name': json['room_name'] as String,
+          'inviter_device_id': json['inviter_device_id'] as String,
+          'inviter_name': json['inviter_name'] as String,
+          'peer_address': socket.remoteAddress.address,
+          'peer_port': json['tcp_port'] as int,
+        });
+        return;
+      }
+
+      // Check if this is an invite accept request
+      if (json['type'] == 'invite_accept') {
+        print('📬 Received invite accept');
+        _handleInviteAccept(json, socket.remoteAddress.address);
+        return;
+      }
+
+      // Check if this is an invite accept response
+      if (json['type'] == 'invite_accept_response') {
+        print('📬 Received invite accept response');
+        _inviteAcceptResponseController.add(json);
         return;
       }
 
@@ -697,6 +738,164 @@ class TcpServerService {
     }
   }
 
+  /// Handle incoming invite accept - auto-respond with encrypted AES key
+  void _handleInviteAccept(
+    Map<String, dynamic> json,
+    String peerAddress,
+  ) async {
+    try {
+      final roomId = json['room_id'] as String;
+      final accepterPublicKey = json['accepter_public_key'] as String;
+      final accepterPort = json['accepter_port'] as int;
+
+      print('📬 Received invite accept for room $roomId from $peerAddress');
+
+      // Check if we're a member of this room
+      final roomAesKey = RoomService.instance.getRoomAesKey(roomId);
+      if (roomAesKey == null) {
+        print('⚠️ Not a member of room $roomId, cannot respond');
+        return;
+      }
+
+      // Get room details
+      final rooms = await RoomService.instance.getJoinedRooms();
+      final room = rooms.firstWhere((r) => r.roomId == roomId);
+
+      // Encrypt AES key with accepter's public key
+      final securityService = SecurityService.instance;
+      final aesKeyBase64 = base64Encode(roomAesKey);
+      final encryptedAesKey = securityService.encryptWithPublicKeyPem(
+        aesKeyBase64,
+        accepterPublicKey,
+      );
+
+      // Send response with encrypted AES key
+      await sendInviteAcceptResponse(
+        peerAddress: peerAddress,
+        peerPort: accepterPort,
+        roomId: roomId,
+        roomName: room.roomName,
+        creatorName: room.creatorName,
+        encryptedAesKey: encryptedAesKey,
+      );
+
+      print('✅ Sent encrypted AES key to $peerAddress for room $roomId');
+    } catch (e) {
+      print('❌ Failed to handle invite accept: $e');
+    }
+  }
+
+  /// Send invite accept to request room key
+  Future<bool> sendInviteAccept({
+    required String peerAddress,
+    required int peerPort,
+    required String roomId,
+    required String accepterPublicKey,
+    required int accepterPort,
+  }) async {
+    try {
+      final request = {
+        'type': 'invite_accept',
+        'room_id': roomId,
+        'accepter_public_key': accepterPublicKey,
+        'accepter_port': accepterPort,
+      };
+
+      final requestJson = jsonEncode(request);
+      print(
+        '📤 Sending invite accept to $peerAddress:$peerPort for room $roomId',
+      );
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$requestJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Invite accept sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send invite accept to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send invite accept: $e');
+      return false;
+    }
+  }
+
+  /// Send invite accept response with encrypted AES key
+  Future<bool> sendInviteAcceptResponse({
+    required String peerAddress,
+    required int peerPort,
+    required String roomId,
+    required String roomName,
+    required String creatorName,
+    required String encryptedAesKey,
+  }) async {
+    try {
+      final response = {
+        'type': 'invite_accept_response',
+        'room_id': roomId,
+        'room_name': roomName,
+        'creator_name': creatorName,
+        'encrypted_aes_key': encryptedAesKey,
+      };
+
+      final responseJson = jsonEncode(response);
+      print('📤 Sending invite accept response to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$responseJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Invite accept response sent successfully');
+      return true;
+    } catch (e) {
+      print(
+        '❌ Failed to send invite accept response to $peerAddress:$peerPort: $e',
+      );
+      _errorController.add('Failed to send invite accept response: $e');
+      return false;
+    }
+  }
+
+  /// Send invite request to a peer
+  Future<bool> sendInvite({
+    required String peerAddress,
+    required int peerPort,
+    required String inviteId,
+    required String roomId,
+    required String roomName,
+    required String inviterDeviceId,
+    required String inviterName,
+    required int tcpPort,
+  }) async {
+    try {
+      final invite = {
+        'type': 'invite_request',
+        'invite_id': inviteId,
+        'room_id': roomId,
+        'room_name': roomName,
+        'inviter_device_id': inviterDeviceId,
+        'inviter_name': inviterName,
+        'tcp_port': tcpPort,
+      };
+
+      final inviteJson = jsonEncode(invite);
+      print('📬 Sending invite to $peerAddress:$peerPort');
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$inviteJson\n');
+      await socket.flush();
+      await socket.close();
+
+      print('✅ Invite sent successfully');
+      return true;
+    } catch (e) {
+      print('❌ Failed to send invite to $peerAddress:$peerPort: $e');
+      _errorController.add('Failed to send invite: $e');
+      return false;
+    }
+  }
+
   /// Stop the TCP server
   Future<void> stop() async {
     if (!_isRunning) return;
@@ -726,5 +925,6 @@ class TcpServerService {
     _joinResponseController.close();
     _typingIndicatorController.close();
     _syncReceivedController.close();
+    _inviteRequestController.close();
   }
 }

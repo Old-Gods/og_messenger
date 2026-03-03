@@ -10,6 +10,7 @@ import '../../../messaging/providers/color_assignment_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../rooms/providers/room_provider.dart';
+import '../../../rooms/presentation/widgets/invite_user_modal.dart';
 
 /// Main chat screen
 class ChatScreen extends ConsumerStatefulWidget {
@@ -233,78 +234,128 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void _showRoomInfo(dynamic activeRoom, List<dynamic> onlineMembers) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              activeRoom.roomName,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Created by ${activeRoom.creatorName}',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
-            const Divider(height: 32),
-            Text(
-              'Online Members (${onlineMembers.length})',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            if (onlineMembers.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No members online',
-                  style: TextStyle(color: Colors.grey[600]),
+      builder: (context) => Consumer(
+        builder: (context, ref, child) {
+          // Get discovery to find non-member users
+          final discoveryState = ref.read(discoveryProvider);
+
+          // Find users online that are not members of this room
+          final nonMemberUsers = discoveryState.peers.values
+              .where(
+                (peer) => !onlineMembers.any(
+                  (member) => member.deviceId == peer.deviceId,
                 ),
               )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: onlineMembers.length,
-                  itemBuilder: (context, index) {
-                    final member = onlineMembers[index];
-                    return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person, size: 20),
-                      ),
-                      title: Text(member.deviceName),
-                      trailing: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    );
-                  },
+              .toList();
+
+          return Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activeRoom.roomName,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            const Divider(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _leaveRoom(activeRoom.roomId);
-                },
-                icon: const Icon(Icons.exit_to_app),
-                label: const Text('Leave Room'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
+                const SizedBox(height: 4),
+                Text(
+                  'Created by ${activeRoom.creatorName}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
-              ),
+                const Divider(height: 32),
+                Text(
+                  'Online Members (${onlineMembers.length})',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (onlineMembers.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'No members online',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: onlineMembers.length,
+                      itemBuilder: (context, index) {
+                        final member = onlineMembers[index];
+                        return ListTile(
+                          leading: const CircleAvatar(
+                            child: Icon(Icons.person, size: 20),
+                          ),
+                          title: Text(member.deviceName),
+                          trailing: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: const BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                // Invite button (only show if there are non-member users online)
+                if (nonMemberUsers.isNotEmpty) ...[
+                  const Divider(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InviteUserModal(
+                              roomId: activeRoom.roomId,
+                              onlineMembers: onlineMembers,
+                              onlineUsers: nonMemberUsers,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Invite Members'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+                const Divider(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _leaveRoom(activeRoom.roomId);
+                    },
+                    icon: const Icon(Icons.exit_to_app),
+                    label: const Text('Leave Room'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

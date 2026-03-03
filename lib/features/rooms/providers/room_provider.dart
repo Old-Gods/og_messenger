@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/entities/room.dart';
 import '../domain/entities/join_request.dart';
+import '../domain/entities/invite_request.dart';
 import '../data/services/room_service.dart';
 import '../../storage/data/services/database_service.dart';
 import '../../security/data/services/security_service.dart';
@@ -19,6 +20,7 @@ class RoomState {
   final Map<String, Room> joinedRooms; // Locally joined rooms
   final Map<String, JoinRequest> pendingRequests; // Requests from others
   final Map<String, JoinRequest> outgoingRequests; // Requests sent by us
+  final Map<String, InviteRequest> receivedInvites; // Invites received by us
   final bool isLoading;
   final String? error;
 
@@ -28,6 +30,7 @@ class RoomState {
     this.joinedRooms = const {},
     this.pendingRequests = const {},
     this.outgoingRequests = const {},
+    this.receivedInvites = const {},
     this.isLoading = false,
     this.error,
   });
@@ -38,6 +41,7 @@ class RoomState {
     Map<String, Room>? joinedRooms,
     Map<String, JoinRequest>? pendingRequests,
     Map<String, JoinRequest>? outgoingRequests,
+    Map<String, InviteRequest>? receivedInvites,
     bool? isLoading,
     String? error,
   }) {
@@ -47,6 +51,7 @@ class RoomState {
       joinedRooms: joinedRooms ?? this.joinedRooms,
       pendingRequests: pendingRequests ?? this.pendingRequests,
       outgoingRequests: outgoingRequests ?? this.outgoingRequests,
+      receivedInvites: receivedInvites ?? this.receivedInvites,
       isLoading: isLoading ?? this.isLoading,
       error: error,
     );
@@ -58,6 +63,8 @@ class RoomNotifier extends Notifier<RoomState> {
   StreamSubscription? _joinRequestSubscription;
   StreamSubscription? _joinResponseSubscription;
   StreamSubscription? _requestResolvedSubscription;
+  StreamSubscription? _inviteRequestSubscription;
+  StreamSubscription? _inviteAcceptResponseSubscription;
 
   @override
   RoomState build() {
@@ -75,11 +82,23 @@ class RoomNotifier extends Notifier<RoomState> {
         .requestResolvedStream
         .listen(_handleRequestResolved);
 
+    // Listen to invite requests
+    _inviteRequestSubscription = TcpServerService.instance.inviteRequestStream
+        .listen(_handleInviteRequest);
+
+    // Listen to invite accept responses
+    _inviteAcceptResponseSubscription = TcpServerService
+        .instance
+        .inviteAcceptResponseStream
+        .listen(_handleInviteAcceptResponse);
+
     // Clean up subscriptions when provider is disposed
     ref.onDispose(() {
       _joinRequestSubscription?.cancel();
       _joinResponseSubscription?.cancel();
       _requestResolvedSubscription?.cancel();
+      _inviteRequestSubscription?.cancel();
+      _inviteAcceptResponseSubscription?.cancel();
     });
 
     // Load joined rooms and pending requests from database after build completes
@@ -113,9 +132,17 @@ class RoomNotifier extends Notifier<RoomState> {
         pendingRequestsMap[request.requestId] = request;
       }
 
+      // Load received invites
+      final invitesList = await DatabaseService.instance.getInviteRequests();
+      final invitesMap = <String, InviteRequest>{};
+      for (final invite in invitesList) {
+        invitesMap[invite.inviteId] = invite;
+      }
+
       state = state.copyWith(
         joinedRooms: joinedRoomsMap,
         pendingRequests: pendingRequestsMap,
+        receivedInvites: invitesMap,
         isLoading: false,
       );
     } catch (e) {
@@ -592,6 +619,248 @@ class RoomNotifier extends Notifier<RoomState> {
       }
     } catch (e) {
       print('⚠️ Error handling request_resolved: $e');
+    }
+  }
+
+  /// Handle incoming invite request
+  void _handleInviteRequest(Map<String, dynamic> data) {
+    try {
+      final inviteId = data['invite_id'] as String;
+      final roomId = data['room_id'] as String;
+      final roomName = data['room_name'] as String;
+      final inviterDeviceId = data['inviter_device_id'] as String;
+      final inviterName = data['inviter_name'] as String;
+
+      print('📬 Received invite: $inviteId for room $roomId');
+
+      // Check if we're already a member of this room
+      if (state.joinedRooms.containsKey(roomId)) {
+        print('ℹ️ Ignored invite to room user is already member of: $roomId');
+        return;
+      }
+
+      // Create invite request entity
+      final inviteRequest = InviteRequest(
+        inviteId: inviteId,
+        roomId: roomId,
+        roomName: roomName,
+        inviterDeviceId: inviterDeviceId,
+        inviterName: inviterName,
+        createdAt: DateTime.now(),
+      );
+
+      // Upsert in database (handles resends)
+      DatabaseService.instance.upsertInviteRequest(inviteRequest);
+
+      // Add to received invites (upsert logic for resends)
+      final updatedReceivedInvites = Map<String, InviteRequest>.from(
+        state.receivedInvites,
+      );
+      updatedReceivedInvites[inviteId] = inviteRequest;
+
+      state = state.copyWith(receivedInvites: updatedReceivedInvites);
+
+      print('✅ Invite stored: $inviteId from $inviterName');
+
+      // Show notification if not viewing room list
+      NotificationService.instance.showInviteNotification(
+        inviterId: inviterDeviceId,
+        inviterName: inviterName,
+        roomId: roomId,
+        roomName: roomName,
+        inviteId: inviteId,
+      );
+    } catch (e) {
+      print('⚠️ Error handling invite request: $e');
+    }
+  }
+
+  /// Handle incoming invite accept response with encrypted AES key
+  void _handleInviteAcceptResponse(Map<String, dynamic> data) async {
+    try {
+      final roomId = data['room_id'] as String;
+      final roomName = data['room_name'] as String;
+      final creatorName = data['creator_name'] as String;
+      final encryptedAesKey = data['encrypted_aes_key'] as String;
+
+      print('📬 Received invite accept response for room $roomId');
+
+      // Join the room immediately
+      await RoomService.instance.joinRoom(
+        roomId,
+        roomName,
+        creatorName,
+        encryptedAesKey,
+      );
+
+      // Reload joined rooms
+      await _loadState();
+
+      // Set as active room
+      state = state.copyWith(activeRoomId: roomId);
+
+      print('✅ Successfully auto-joined room via invite: $roomId');
+    } catch (e) {
+      print('❌ Failed to handle invite accept response: $e');
+      state = state.copyWith(error: 'Failed to join room: $e');
+    }
+  }
+
+  /// Send invite to a peer
+  Future<void> sendInvite(String roomId, String targetDeviceId) async {
+    try {
+      print('🔔 Sending invite for room $roomId to device $targetDeviceId');
+
+      // Get room info
+      final room = state.joinedRooms[roomId];
+      if (room == null) {
+        print('❌ Room not found: $roomId');
+        return;
+      }
+
+      // Get settings
+      final settings = ref.read(settingsProvider);
+
+      // Get target peer from discovery
+      final discoveryState = ref.read(discoveryProvider);
+      final targetPeer = discoveryState.peers[targetDeviceId];
+      if (targetPeer == null) {
+        print('❌ Target peer not found: $targetDeviceId');
+        return;
+      }
+
+      // Generate unique invite ID
+      const uuid = Uuid();
+      final inviteId = uuid.v7();
+
+      // Send invite via TCP
+      final tcpPort = TcpServerService.instance.actualPort;
+      if (tcpPort == null) {
+        print('❌ TCP server not running');
+        return;
+      }
+
+      await TcpServerService.instance.sendInvite(
+        peerAddress: targetPeer.ipAddress,
+        peerPort: targetPeer.tcpPort,
+        inviteId: inviteId,
+        roomId: roomId,
+        roomName: room.roomName,
+        inviterDeviceId: settings.deviceId!,
+        inviterName: settings.userName!,
+        tcpPort: tcpPort,
+      );
+
+      print('✅ Invite sent successfully: $inviteId');
+    } catch (e) {
+      print('❌ Failed to send invite: $e');
+      state = state.copyWith(error: 'Failed to send invite: $e');
+    }
+  }
+
+  /// Accept an invite and auto-join the room
+  Future<void> acceptInvite(String inviteId) async {
+    try {
+      final invite = state.receivedInvites[inviteId];
+      if (invite == null) {
+        print('❌ Invite not found: $inviteId');
+        return;
+      }
+
+      print('✅ Accepting invite: $inviteId for room ${invite.roomId}');
+
+      // Check if room still exists in discovery
+      final discoveryState = ref.read(discoveryProvider);
+      final room = discoveryState.availableRooms[invite.roomId];
+
+      if (room == null) {
+        print('⚠️ Room no longer exists: ${invite.roomId}');
+        // Delete from database
+        await DatabaseService.instance.deleteInviteRequest(inviteId);
+        // Remove from state
+        final updatedInvites = Map<String, InviteRequest>.from(
+          state.receivedInvites,
+        );
+        updatedInvites.remove(inviteId);
+        state = state.copyWith(receivedInvites: updatedInvites);
+        state = state.copyWith(error: 'Room no longer exists');
+        return;
+      }
+
+      // Get online members for this room to request the AES key
+      final discoveryNotifier = ref.read(discoveryProvider.notifier);
+      final onlineMembers = discoveryNotifier.getOnlineMembersForRoom(
+        invite.roomId,
+      );
+
+      if (onlineMembers.isEmpty) {
+        print('⚠️ No online members found for room ${invite.roomId}');
+        // Delete the invite but show error
+        await DatabaseService.instance.deleteInviteRequest(inviteId);
+        final updatedInvites = Map<String, InviteRequest>.from(
+          state.receivedInvites,
+        );
+        updatedInvites.remove(inviteId);
+        state = state.copyWith(receivedInvites: updatedInvites);
+        state = state.copyWith(
+          error: 'No online members available to join room',
+        );
+        return;
+      }
+
+      // Send invite_accept to first online member to get encrypted AES key
+      final targetMember = onlineMembers.first;
+      final securityService = SecurityService.instance;
+
+      final success = await TcpServerService.instance.sendInviteAccept(
+        peerAddress: targetMember.ipAddress,
+        peerPort: targetMember.tcpPort,
+        roomId: invite.roomId,
+        accepterPublicKey: securityService.publicKeyPem!,
+        accepterPort: TcpServerService.instance.actualPort!,
+      );
+
+      if (!success) {
+        state = state.copyWith(error: 'Failed to send invite accept');
+        return;
+      }
+
+      // Delete the invite from database and state
+      await DatabaseService.instance.deleteInviteRequest(inviteId);
+      final updatedInvites = Map<String, InviteRequest>.from(
+        state.receivedInvites,
+      );
+      updatedInvites.remove(inviteId);
+      state = state.copyWith(receivedInvites: updatedInvites);
+
+      print(
+        '✅ Invite accepted, waiting for room key for room ${invite.roomId}',
+      );
+    } catch (e) {
+      print('❌ Failed to accept invite: $e');
+      state = state.copyWith(error: 'Failed to accept invite: $e');
+    }
+  }
+
+  /// Reject an invite
+  Future<void> rejectInvite(String inviteId) async {
+    try {
+      print('❌ Rejecting invite: $inviteId');
+
+      // Delete from database
+      await DatabaseService.instance.deleteInviteRequest(inviteId);
+
+      // Remove from state
+      final updatedInvites = Map<String, InviteRequest>.from(
+        state.receivedInvites,
+      );
+      updatedInvites.remove(inviteId);
+
+      state = state.copyWith(receivedInvites: updatedInvites);
+
+      print('✅ Invite rejected and deleted: $inviteId');
+    } catch (e) {
+      print('⚠️ Error rejecting invite: $e');
     }
   }
 }

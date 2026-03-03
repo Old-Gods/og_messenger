@@ -10,7 +10,6 @@ import 'features/messaging/providers/message_provider.dart';
 import 'features/notifications/data/services/notification_service.dart';
 import 'features/security/data/services/security_service.dart';
 import 'features/rooms/data/services/room_service.dart';
-import 'features/rooms/providers/room_provider.dart';
 
 /// Global navigator key for handling navigation from anywhere (e.g., notifications)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -49,8 +48,10 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
     WidgetsBinding.instance.addObserver(this);
 
     // Set up notification tap handling
-    NotificationService.instance.setNavigationCallback((roomId) {
-      _navigateToRoom(roomId);
+    NotificationService.instance.setNavigationCallback((payload) {
+      // Navigate to room list for all notifications
+      // The snackbar for invites will show automatically when viewing room list
+      navigatorKey.currentState?.popUntil((route) => route.isFirst);
     });
 
     // Initialize settings provider (including network ID detection)
@@ -58,18 +59,6 @@ class _OGMessengerAppState extends ConsumerState<OGMessengerApp>
       print('🚀 Triggering settings provider initialization from main.dart');
       ref.read(settingsProvider.notifier).initialize();
     });
-  }
-
-  /// Navigate to a specific room
-  void _navigateToRoom(String roomId) {
-    // Get the room provider to switch active room
-    final roomNotifier = ref.read(roomProvider.notifier);
-
-    // Switch to the room
-    roomNotifier.switchActiveRoom(roomId);
-
-    // Navigate to chat screen using the global navigator key
-    navigatorKey.currentState?.pushNamed('/chat');
   }
 
   @override
