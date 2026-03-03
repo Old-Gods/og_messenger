@@ -18,6 +18,7 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
   bool _servicesInitialized = false;
   int _previousJoinedRoomsCount = 0;
   bool _isFirstLoad = true;
+  final Set<String> _shownInviteIds = {};
 
   @override
   void initState() {
@@ -104,40 +105,78 @@ class _RoomListScreenState extends ConsumerState<RoomListScreen> {
       });
     }
 
-    // Show snackbar for incoming invites
+    // Show snackbar for incoming invites (only for new invites)
     if (roomState.receivedInvites.isNotEmpty) {
       // Get the most recent invite
       final invites = roomState.receivedInvites.values.toList();
       invites.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       final latestInvite = invites.first;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
-              ),
-              duration: const Duration(seconds: 8),
-              action: SnackBarAction(
-                label: 'Accept',
-                onPressed: () {
-                  ref
-                      .read(roomProvider.notifier)
-                      .acceptInvite(latestInvite.inviteId);
-                },
-              ),
-              // Add a custom dismiss action for "Ignore"
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-            ),
-          );
+      // Only show if we haven't shown this invite before
+      if (!_shownInviteIds.contains(latestInvite.inviteId)) {
+        _shownInviteIds.add(latestInvite.inviteId);
 
-          // Note: For a true "Ignore" button alongside "Accept", we'd need a custom widget
-          // For now, swiping dismisses with ignore, and the tap button accepts
-        }
-      });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${latestInvite.inviterName} invited you to ${latestInvite.roomName}',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ref
+                            .read(roomProvider.notifier)
+                            .rejectInvite(latestInvite.inviteId);
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.grey.withValues(alpha: 0.3),
+                      ),
+                      child: const Text(
+                        'Ignore',
+                        style: TextStyle(color: Colors.black87),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ref
+                            .read(roomProvider.notifier)
+                            .acceptInvite(latestInvite.inviteId);
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.green.withValues(alpha: 0.8),
+                      ),
+                      child: const Text(
+                        'Accept',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                duration: const Duration(days: 365),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.all(16),
+              ),
+            );
+          }
+        });
+      }
     }
+
+    // Clean up shown invite IDs when invites are removed from state
+    _shownInviteIds.removeWhere(
+      (id) => !roomState.receivedInvites.containsKey(id),
+    );
 
     return Scaffold(
       appBar: AppBar(
