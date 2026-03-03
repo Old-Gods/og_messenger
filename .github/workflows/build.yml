@@ -15,16 +15,12 @@ on:
     secrets:
       ANDROID_KEYSTORE_BASE64:
         description: Base64 encoded version of your keystore file
-        required: true
       ANDROID_KEYSTORE_PASSWORD:
         description: Your keystore password
-        required: true
       ANDROID_KEY_PASSWORD:
         description: Your key password
-        required: true
       ANDROID_KEY_ALIAS:
         description: The key alias to use
-        required: true
 
 jobs:
   build-android:
