@@ -18,6 +18,8 @@ void main() {
       // Ensure clean state before each test
       try {
         await dbService.deleteDatabase();
+        // Wait for file system to release handles
+        await Future.delayed(const Duration(milliseconds: 200));
       } catch (e) {
         // Ignore if database doesn't exist
       }
@@ -25,7 +27,11 @@ void main() {
 
     tearDown(() async {
       try {
+        // Close database connection before deleting
+        await dbService.close();
         await dbService.deleteDatabase();
+        // Wait for file system to release handles
+        await Future.delayed(const Duration(milliseconds: 200));
       } catch (e) {
         // Ignore errors during cleanup
       }
@@ -392,6 +398,8 @@ void main() {
               createdAt: DateTime(2024, 1, i),
             ),
           );
+          // Small delay to prevent I/O exhaustion in CI
+          await Future.delayed(const Duration(milliseconds: 10));
         }
 
         for (int i = 1; i <= 2; i++) {
@@ -405,6 +413,8 @@ void main() {
               createdAt: DateTime(2024, 1, i + 10),
             ),
           );
+          // Small delay to prevent I/O exhaustion in CI
+          await Future.delayed(const Duration(milliseconds: 10));
         }
 
         // Verify total count
