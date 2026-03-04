@@ -2,7 +2,7 @@
 
 This directory contains comprehensive tests for the OG Messenger application.
 
-**Total Tests: 95** (as of multi-room refactor)
+**Total Tests: 115** (as of reactions feature)
 
 ## Test Structure
 
@@ -20,11 +20,22 @@ test/
     │   └── presentation/
     │       └── screens/
     │           └── chat_screen_test.dart        # Chat screen widget tests
-    └── rooms/
-        └── domain/
-            └── entities/
-                ├── room_test.dart               # Room entity tests
-                └── join_request_test.dart       # Join request entity tests
+    ├── reactions/
+    │   ├── domain/
+    │   │   └── entities/
+    │   │       └── reaction_test.dart           # Reaction entity tests
+    │   └── data/
+    │       └── repositories/
+    │           └── reaction_repository_test.dart # Reaction repository tests
+    ├── rooms/
+    │   └── domain/
+    │       └── entities/
+    │           ├── room_test.dart               # Room entity tests
+    │           └── join_request_test.dart       # Join request entity tests
+    └── storage/
+        └── data/
+            └── services/
+                └── database_service_reactions_test.dart # Reaction database tests
 ```
 
 ## Running Tests
@@ -59,6 +70,15 @@ xdg-open coverage/html/index.html  # Linux
 ### 1. Unit Tests
 
 #### Domain Entities
+- **Reaction Tests** ([reaction_test.dart](features/reactions/domain/entities/reaction_test.dart))
+  - Constructor validation
+  - JSON serialization/deserialization
+  - copyWith functionality
+  - Equality based on composite key (message + sender + reactor + room)
+  - Timestamp microsecond precision
+  - Emoji handling (including skin tones and complex sequences)
+  - UPSERT behavior verification
+
 - **Room Tests** ([room_test.dart](features/rooms/domain/entities/room_test.dart))
   - Constructor validation
   - JSON serialization/deserialization
@@ -74,6 +94,18 @@ xdg-open coverage/html/index.html  # Linux
   - Public key storage
   - Timestamp handling
 
+#### Repositories
+- **Reaction Repository Tests** ([reaction_repository_test.dart](features/reactions/data/repositories/reaction_repository_test.dart))
+  - Save reaction (UPSERT behavior)
+  - Delete specific reaction
+  - Get reactions for single message
+  - Get reactions for multiple messages (batch query)
+  - Delete reactions for message (cascade)
+  - Delete reactions in room
+  - Delete old reactions (retention policy)
+  - Multi-user reaction handling
+  - Room isolation verification
+
 #### Constants
 - **App Constants** ([app_constants_test.dart](core/constants/app_constants_test.dart))
   - Validates app configuration values
@@ -87,6 +119,17 @@ xdg-open coverage/html/index.html  # Linux
   - Validates timeouts and intervals
 
 ### 2. Service Tests
+
+#### Database Service - Reactions
+- **Database Service Reactions Tests** ([database_service_reactions_test.dart](features/storage/data/services/database_service_reactions_test.dart))
+  - Table creation with correct schema
+  - UNIQUE constraint on composite key
+  - Index creation for performance
+  - Cascade deletion when message deleted
+  - Cascade deletion when messages expire
+  - Cascade deletion when all messages cleared
+  - Cascade deletion when room messages cleared
+  - Emoji persistence with special characters
 
 Note: Service tests (SecurityService, RoomService) were removed due to complexity of database/encryption mocking. Service functionality is validated through:
 - **Entity tests** - Core data structure validation
