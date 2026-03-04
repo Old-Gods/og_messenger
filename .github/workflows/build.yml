@@ -3,11 +3,6 @@ name: Build
 on:
   workflow_call:
     inputs:
-      author-is-collaborator:
-        default: true
-        description: Has the author, of this commit, a collaborator of this repository?
-        required: false
-        type: boolean
       version:
         description: A build version to add to the name
         required: true
@@ -21,6 +16,9 @@ on:
         description: Your key password
       ANDROID_KEY_ALIAS:
         description: The key alias to use
+
+env:
+  has-secrets: ${{ secrets.ANDROID_KEY_ALIAS }} != ''
 
 jobs:
   build-android:
@@ -39,7 +37,7 @@ jobs:
         with:
           channel: "stable"
           cache: true
-      - if: inputs.author-is-collaborator
+      - if: env.has-secrets
         uses: ./.github/actions/configure-android-signing
         with:
           keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -50,8 +48,8 @@ jobs:
       - uses: ./.github/actions/build-apk
         with:
           filename: ${{ env.APK_NAME }}
-          type: ${{ inputs.author-is-collaborator && 'release' || 'debug' }}
-      - if: inputs.author-is-collaborator
+          type: ${{ env.has-secrets && 'release' || 'debug' }}
+      - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
           name: build-apk
@@ -59,7 +57,7 @@ jobs:
       # - uses: ./.github/actions/build-aap
       #   with:
       #     filename: ${{ env.AAB_NAME }}
-      # - if: inputs.author-is-collaborator
+      # - if: env.has-secrets
       #   uses: actions/upload-artifact@v7
       #   with:
       #     name: build-aab
@@ -80,7 +78,7 @@ jobs:
       - run: | # shell
           cd build/ios/iphoneos
           zip -r "../../../$BUILD_NAME" Runner.app
-      - if: inputs.author-is-collaborator
+      - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
           name: build-ios
@@ -104,7 +102,7 @@ jobs:
       - run: | # shell
           cd build/linux/x64/release/bundle
           tar -czf "../../../../../$BUILD_NAME" *
-      - if: inputs.author-is-collaborator
+      - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
           name: build-linux
@@ -129,7 +127,7 @@ jobs:
             -ov \
             -format UDZO \
             "${{ env.BUILD_NAME }}"
-      - if: inputs.author-is-collaborator
+      - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
           name: build-macos
@@ -148,7 +146,7 @@ jobs:
       - run: flutter pub get
       - run: flutter build windows --release
       - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
-      - if: inputs.author-is-collaborator
+      - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
           name: build-windows

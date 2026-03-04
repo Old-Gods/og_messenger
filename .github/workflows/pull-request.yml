@@ -27,5 +27,4 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      author-is-collaborator: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
       version: ${{ needs.pr-prepare.outputs.version }}
