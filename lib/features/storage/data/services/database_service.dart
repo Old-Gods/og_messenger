@@ -10,10 +10,18 @@ import '../../../rooms/domain/entities/invite_request.dart';
 
 /// SQLite database service for managing message and room storage
 class DatabaseService {
-  static Database? _database;
+  Database? _database;
+  final String? _customDatabaseName;
+
   static final DatabaseService instance = DatabaseService._();
 
-  DatabaseService._();
+  DatabaseService._({String? customDatabaseName})
+    : _customDatabaseName = customDatabaseName;
+
+  /// Factory constructor for test instances with custom database names
+  factory DatabaseService.forTest(String testName) {
+    return DatabaseService._(customDatabaseName: '${testName}_test.db');
+  }
 
   /// Get database instance, initializing if needed
   Future<Database> get database async {
@@ -25,18 +33,33 @@ class DatabaseService {
   /// Initialize the database
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.databaseName);
+    final dbName = _customDatabaseName ?? AppConstants.databaseName;
+    final path = join(dbPath, dbName);
 
     return await openDatabase(
       path,
-      version: 3, // V3: Multi-room architecture
+      version: 4, // V4: Reply feature
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Handle database upgrades
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 4) {
+      // V3 -> V4: Add reply columns to messages table
+      await db.execute('''
+        ALTER TABLE messages ADD COLUMN replied_to_uuid TEXT
+      ''');
+      await db.execute('''
+        ALTER TABLE messages ADD COLUMN replied_to_sender_id TEXT
+      ''');
+    }
   }
 
   /// Create database tables (fresh start, no migration)
   Future<void> _onCreate(Database db, int version) async {
-    // Create messages table with room_id
+    // Create messages table with room_id and reply support
     await db.execute('''
       CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +68,9 @@ class DatabaseService {
         sender_id TEXT NOT NULL,
         sender_name TEXT NOT NULL,
         content TEXT NOT NULL,
-        room_id TEXT NOT NULL
+        room_id TEXT NOT NULL,
+        replied_to_uuid TEXT,
+        replied_to_sender_id TEXT
       )
     ''');
 
@@ -564,9 +589,10 @@ class DatabaseService {
 
   /// Close the database
   Future<void> close() async {
-    final db = await database;
-    await db.close();
-    _database = null;
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
   }
 
   /// Delete the database file (for testing)
@@ -575,7 +601,8 @@ class DatabaseService {
       await close();
     }
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.databaseName);
+    final dbName = _customDatabaseName ?? AppConstants.databaseName;
+    final path = join(dbPath, dbName);
     await databaseFactory.deleteDatabase(path);
     _database = null;
   }

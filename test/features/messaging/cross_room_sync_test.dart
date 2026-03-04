@@ -13,7 +13,7 @@ import '../../helpers/test_helpers.dart';
 /// 3. Duplicate detection works correctly within room boundaries
 void main() {
   // Initialize FFI for testing
-  setUpAll(() {
+  setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
@@ -25,30 +25,25 @@ void main() {
     setUp(() async {
       TestHelpers.setupMockSharedPreferences();
 
-      // Clean up any existing database first
+      // Create a unique database instance for these tests
+      database = DatabaseService.forTest('cross_room_sync');
+
+      // Clean up any existing test database
       try {
-        await DatabaseService.instance.deleteDatabase();
-      } catch (e) {
+        await database.deleteDatabase();
+      } catch (_) {
         // Ignore if database doesn't exist
       }
-      // Wait for file system to release handles (longer delay for CI)
-      await Future.delayed(const Duration(milliseconds: 300));
 
-      // Initialize services with fresh database
-      database = DatabaseService.instance;
+      // Initialize fresh database
+      await database.database;
       repository = MessageRepository(database: database);
     });
 
     tearDown(() async {
-      // Clean up - close and reset the database
-      try {
-        await database.close();
-        await DatabaseService.instance.deleteDatabase();
-      } catch (e) {
-        // Ignore errors during cleanup
-      }
-      // Wait for file system to release handles (longer delay for CI)
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Clean up after each test
+      await database.close();
+      await database.deleteDatabase();
     });
 
     test('Messages from different rooms are not cross-contaminated', () async {

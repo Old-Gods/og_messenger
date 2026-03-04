@@ -10,6 +10,8 @@ class MessageSchema {
   static const String columnSenderName = 'sender_name';
   static const String columnContent = 'content';
   static const String columnRoomId = 'room_id';
+  static const String columnRepliedToUuid = 'replied_to_uuid';
+  static const String columnRepliedToSenderId = 'replied_to_sender_id';
 
   final int? id;
   final String uuid;
@@ -18,6 +20,8 @@ class MessageSchema {
   final String senderName;
   final String content;
   final String roomId;
+  final String? repliedToUuid;
+  final String? repliedToSenderId;
 
   MessageSchema({
     this.id,
@@ -27,6 +31,8 @@ class MessageSchema {
     required this.senderName,
     required this.content,
     required this.roomId,
+    this.repliedToUuid,
+    this.repliedToSenderId,
   });
 
   /// Convert from Map (database row)
@@ -39,6 +45,8 @@ class MessageSchema {
       senderName: map[columnSenderName] as String,
       content: map[columnContent] as String,
       roomId: map[columnRoomId] as String,
+      repliedToUuid: map[columnRepliedToUuid] as String?,
+      repliedToSenderId: map[columnRepliedToSenderId] as String?,
     );
   }
 
@@ -52,6 +60,8 @@ class MessageSchema {
       columnSenderName: senderName,
       columnContent: content,
       columnRoomId: roomId,
+      columnRepliedToUuid: repliedToUuid,
+      columnRepliedToSenderId: repliedToSenderId,
     };
   }
 
@@ -65,6 +75,8 @@ class MessageSchema {
       'content': content,
       'isOutgoing': senderId == localDeviceId,
       'roomId': roomId,
+      'repliedToUuid': repliedToUuid,
+      'repliedToSenderId': repliedToSenderId,
     };
   }
 }

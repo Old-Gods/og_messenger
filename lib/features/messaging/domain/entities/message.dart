@@ -8,6 +8,14 @@ class Message {
   final bool isOutgoing;
   final String? roomId; // Room ID for multi-room support
 
+  // Reply reference (stored in database)
+  final String? repliedToUuid;
+  final String? repliedToSenderId;
+
+  // Reply preview data (runtime only, for display)
+  final String? replyToPreviewContent;
+  final String? replyToPreviewSenderName;
+
   Message({
     required this.uuid,
     required this.timestampMicros,
@@ -16,6 +24,10 @@ class Message {
     required this.content,
     required this.isOutgoing,
     this.roomId,
+    this.repliedToUuid,
+    this.repliedToSenderId,
+    this.replyToPreviewContent,
+    this.replyToPreviewSenderName,
   });
 
   /// Get DateTime from microseconds timestamp
@@ -32,18 +44,38 @@ class Message {
       content: json['content'] as String,
       isOutgoing: false, // Will be determined by comparing with local device ID
       roomId: json['room_id'] as String?,
+      repliedToUuid: json['replied_to_uuid'] as String?,
+      repliedToSenderId: json['replied_to_sender_id'] as String?,
+      replyToPreviewContent: json['reply_to_preview_content'] as String?,
+      replyToPreviewSenderName: json['reply_to_preview_sender_name'] as String?,
     );
   }
 
   /// Convert to JSON for TCP transmission
   Map<String, dynamic> toJson() {
-    return {
+    final json = {
       'uuid': uuid,
       'timestamp_micros': timestampMicros,
       'sender_id': senderId,
       'sender_name': senderName,
       'content': content,
     };
+
+    // Include reply data if present
+    if (repliedToUuid != null) {
+      json['replied_to_uuid'] = repliedToUuid!;
+    }
+    if (repliedToSenderId != null) {
+      json['replied_to_sender_id'] = repliedToSenderId!;
+    }
+    if (replyToPreviewContent != null) {
+      json['reply_to_preview_content'] = replyToPreviewContent!;
+    }
+    if (replyToPreviewSenderName != null) {
+      json['reply_to_preview_sender_name'] = replyToPreviewSenderName!;
+    }
+
+    return json;
   }
 
   /// Create a copy with updated fields
@@ -55,6 +87,10 @@ class Message {
     String? content,
     bool? isOutgoing,
     String? roomId,
+    String? repliedToUuid,
+    String? repliedToSenderId,
+    String? replyToPreviewContent,
+    String? replyToPreviewSenderName,
   }) {
     return Message(
       uuid: uuid ?? this.uuid,
@@ -64,6 +100,12 @@ class Message {
       content: content ?? this.content,
       isOutgoing: isOutgoing ?? this.isOutgoing,
       roomId: roomId ?? this.roomId,
+      repliedToUuid: repliedToUuid ?? this.repliedToUuid,
+      repliedToSenderId: repliedToSenderId ?? this.repliedToSenderId,
+      replyToPreviewContent:
+          replyToPreviewContent ?? this.replyToPreviewContent,
+      replyToPreviewSenderName:
+          replyToPreviewSenderName ?? this.replyToPreviewSenderName,
     );
   }
 
