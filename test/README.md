@@ -2,7 +2,7 @@
 
 This directory contains comprehensive tests for the OG Messenger application.
 
-**Total Tests: 115** (as of reactions feature)
+**Total Tests: 131** (as of reply feature - includes 16 new reply tests)
 
 ## Test Structure
 
@@ -20,6 +20,11 @@ test/
     │   └── presentation/
     │       └── screens/
     │           └── chat_screen_test.dart        # Chat screen widget tests
+    ├── messaging/
+    │   ├── domain/
+    │   │   └── entities/
+    │   │       └── message_reply_test.dart      # Reply feature entity tests (NEW)
+    │   └── cross_room_sync_test.dart            # Cross-room sync tests
     ├── reactions/
     │   ├── domain/
     │   │   └── entities/
@@ -47,7 +52,7 @@ flutter test
 
 ### Run Specific Test File
 ```bash
-flutter test test/features/messaging/domain/entities/message_test.dart
+flutter test test/features/messaging/domain/entities/message_reply_test.dart
 ```
 
 ### Run Tests with Coverage
@@ -70,6 +75,15 @@ xdg-open coverage/html/index.html  # Linux
 ### 1. Unit Tests
 
 #### Domain Entities
+- **Message Reply Tests** ([message_reply_test.dart](features/messaging/domain/entities/message_reply_test.dart)) **NEW**
+  - Reply field handling in message entities (6 fields: repliedToUuid, repliedToSenderId, replyToPreviewContent, replyToPreviewSenderName)
+  - JSON serialization/deserialization with reply data
+  - copyWith functionality for reply fields
+  - Null handling for non-reply messages
+  - Reply preview truncation support
+  - Special characters and newlines in previews
+  - Reply field validation (paired fields, optional previews)
+
 - **Reaction Tests** ([reaction_test.dart](features/reactions/domain/entities/reaction_test.dart))
   - Constructor validation
   - JSON serialization/deserialization
