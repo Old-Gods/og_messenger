@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -273,7 +274,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ],
                                     ),
                                     Expanded(
-                                      child: Container(), // Placeholder for now
+                                      child: EmojiPicker(
+                                        onEmojiSelected: (category, emoji) {
+                                          Navigator.of(
+                                            context,
+                                          ).pop(emoji.emoji);
+                                        },
+                                        config: Config(
+                                          checkPlatformCompatibility: true,
+                                          emojiViewConfig: EmojiViewConfig(
+                                            columns: 7,
+                                            emojiSizeMax: 28,
+                                            verticalSpacing: 0,
+                                            horizontalSpacing: 0,
+                                            gridPadding: EdgeInsets.zero,
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).scaffoldBackgroundColor,
+                                          ),
+                                          skinToneConfig:
+                                              const SkinToneConfig(),
+                                          categoryViewConfig:
+                                              const CategoryViewConfig(),
+                                          bottomActionBarConfig:
+                                              const BottomActionBarConfig(
+                                                enabled: false,
+                                              ),
+                                          searchViewConfig:
+                                              const SearchViewConfig(),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
