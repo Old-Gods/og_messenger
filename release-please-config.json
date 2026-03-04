@@ -4,21 +4,7 @@
   "force-tag-creation": true,
   "packages": {
     ".": {
-      "release-type": "simple",
-      "package-name": "og_messenger",
-      "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
-      "prerelease": false,
-      "include-component-in-tag": false,
-      "include-v-in-tag": true,
-      "extra-files": [
-        {
-          "type": "yaml",
-          "path": "pubspec.yaml",
-          "jsonpath": "$.version"
-        }
-      ]
+      "release-type": "dart"
     }
   }
 }
