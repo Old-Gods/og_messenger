@@ -861,11 +861,6 @@ class _MessageBubble extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!isOwn) ...[
-                  // Reaction button on left for received messages
-                  _buildReactionButton(context, ref),
-                  const SizedBox(width: 4),
-                ],
                 // Message bubble
                 Flexible(
                   child: Container(
@@ -934,8 +929,8 @@ class _MessageBubble extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (isOwn) ...[
-                  // Reaction button on right for sent messages
+                if (!isOwn) ...[
+                  // Reaction button on right for received messages only
                   const SizedBox(width: 4),
                   _buildReactionButton(context, ref),
                 ],
