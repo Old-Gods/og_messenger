@@ -9,6 +9,7 @@ class SettingsState {
   final int retentionDays;
   final bool isFirstLaunch;
   final String themeMode;
+  final List<String> reactionEmojis;
 
   const SettingsState({
     this.deviceId,
@@ -16,6 +17,7 @@ class SettingsState {
     required this.retentionDays,
     required this.isFirstLaunch,
     this.themeMode = 'system',
+    this.reactionEmojis = const ['👍', '👎', '❤️', '😆'],
   });
 
   bool get hasUserName {
@@ -28,6 +30,7 @@ class SettingsState {
     int? retentionDays,
     bool? isFirstLaunch,
     String? themeMode,
+    List<String>? reactionEmojis,
   }) {
     return SettingsState(
       deviceId: deviceId ?? this.deviceId,
@@ -35,6 +38,7 @@ class SettingsState {
       retentionDays: retentionDays ?? this.retentionDays,
       isFirstLaunch: isFirstLaunch ?? this.isFirstLaunch,
       themeMode: themeMode ?? this.themeMode,
+      reactionEmojis: reactionEmojis ?? this.reactionEmojis,
     );
   }
 }
@@ -52,6 +56,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
       themeMode: _service.themeMode,
+      reactionEmojis: _service.reactionEmojis,
     );
   }
 
@@ -66,6 +71,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
       themeMode: _service.themeMode,
+      reactionEmojis: _service.reactionEmojis,
     );
   }
 
@@ -101,6 +107,12 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(themeMode: _service.themeMode);
   }
 
+  /// Update reaction emojis
+  Future<void> setReactionEmojis(List<String> emojis) async {
+    await _service.setReactionEmojis(emojis);
+    state = state.copyWith(reactionEmojis: _service.reactionEmojis);
+  }
+
   /// Reset all settings
   Future<void> resetAll() async {
     await _service.resetAll();
@@ -110,6 +122,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       retentionDays: _service.retentionDays,
       isFirstLaunch: _service.isFirstLaunch,
       themeMode: _service.themeMode,
+      reactionEmojis: _service.reactionEmojis,
     );
   }
 }

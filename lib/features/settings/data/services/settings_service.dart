@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -11,6 +12,7 @@ class SettingsService {
   static const String _keyRetentionDays = 'retention_days';
   static const String _keyFirstLaunch = 'first_launch';
   static const String _keyThemeMode = 'theme_mode';
+  static const String _keyReactionEmojis = 'reaction_emojis';
 
   static final SettingsService instance = SettingsService._();
   SharedPreferences? _prefs;
@@ -157,6 +159,36 @@ class SettingsService {
       return false;
     }
     return await _prefs!.setString(_keyThemeMode, mode);
+  }
+
+  /// Get the reaction emojis list
+  List<String> get reactionEmojis {
+    final jsonString = _prefs?.getString(_keyReactionEmojis);
+    if (jsonString == null || jsonString.isEmpty) {
+      // Return default emoji list
+      return ['👍', '👎', '❤️', '😆'];
+    }
+    try {
+      final List<dynamic> decoded = json.decode(jsonString);
+      return decoded.cast<String>();
+    } catch (e) {
+      print('❌ Failed to decode reaction emojis: $e');
+      return ['👍', '👎', '❤️', '😆'];
+    }
+  }
+
+  /// Set the reaction emojis list
+  Future<bool> setReactionEmojis(List<String> emojis) async {
+    if (_prefs == null) return false;
+    // Validate: max 10 emojis, no duplicates
+    if (emojis.length > 10) {
+      print('⚠️ Cannot set more than 10 reaction emojis');
+      return false;
+    }
+    // Remove duplicates
+    final uniqueEmojis = emojis.toSet().toList();
+    final jsonString = json.encode(uniqueEmojis);
+    return await _prefs!.setString(_keyReactionEmojis, jsonString);
   }
 
   /// Reset all settings (for testing)

@@ -11,6 +11,8 @@ import '../../../discovery/providers/discovery_provider.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../rooms/providers/room_provider.dart';
 import '../../../rooms/presentation/widgets/invite_user_modal.dart';
+import '../../../reactions/providers/reaction_provider.dart';
+import '../../../reactions/presentation/widgets/quick_reaction_palette.dart';
 
 /// Main chat screen
 class ChatScreen extends ConsumerStatefulWidget {
@@ -466,6 +468,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final settings = ref.watch(settingsProvider);
     final roomState = ref.watch(roomProvider);
 
+    // Load reactions when messages change
+    ref.listen<MessageState>(messageProvider, (previous, next) {
+      if (next.messages.isNotEmpty && roomState.activeRoomId != null) {
+        final messageKeys = next.messages
+            .map((m) => '${m.uuid}_${m.senderId}')
+            .toList();
+        ref
+            .read(reactionProvider.notifier)
+            .loadReactionsForMessages(messageKeys, roomState.activeRoomId!);
+      }
+    });
+
     // Auto-scroll when new messages arrive, but only in live mode
     if (messageState.messages.length != _previousMessageCount &&
         messageState.isInLiveMode) {
@@ -834,60 +848,101 @@ class _MessageBubble extends ConsumerWidget {
       alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(18),
-        ),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: isOwn
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
-            if (!isOwn)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Tooltip(
-                      message: tooltipMessage,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Darker outline circle
-                          Icon(
-                            Icons.circle,
-                            size: 12,
-                            color: indicatorOutlineColor,
+            // Message bubble with reaction button
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!isOwn) ...[
+                  // Reaction button on left for received messages
+                  _buildReactionButton(context, ref),
+                  const SizedBox(width: 4),
+                ],
+                // Message bubble
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!isOwn)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Tooltip(
+                                  message: tooltipMessage,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // Darker outline circle
+                                      Icon(
+                                        Icons.circle,
+                                        size: 12,
+                                        color: indicatorOutlineColor,
+                                      ),
+                                      // Main filled circle
+                                      Icon(
+                                        Icons.circle,
+                                        size: 10,
+                                        color: indicatorColor,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  message.senderName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          // Main filled circle
-                          Icon(Icons.circle, size: 10, color: indicatorColor),
-                        ],
-                      ),
+                        SelectableText(
+                          message.content,
+                          style: TextStyle(color: textColor, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatTimestamp(message.timestamp),
+                          style: TextStyle(
+                            color: secondaryTextColor,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      message.senderName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            SelectableText(
-              message.content,
-              style: TextStyle(color: textColor, fontSize: 16),
+                if (isOwn) ...[
+                  // Reaction button on right for sent messages
+                  const SizedBox(width: 4),
+                  _buildReactionButton(context, ref),
+                ],
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              _formatTimestamp(message.timestamp),
-              style: TextStyle(color: secondaryTextColor, fontSize: 10),
-            ),
+            // Reactions display
+            _buildReactionsDisplay(context, ref, textColor),
           ],
         ),
       ),
@@ -907,5 +962,142 @@ class _MessageBubble extends ConsumerWidget {
     } else {
       return '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
     }
+  }
+
+  /// Build the reaction button
+  Widget _buildReactionButton(BuildContext context, WidgetRef ref) {
+    final roomState = ref.watch(roomProvider);
+    final currentRoomId = roomState.activeRoomId;
+    if (currentRoomId == null) return const SizedBox.shrink();
+
+    return IconButton(
+      icon: const Icon(Icons.add_reaction_outlined),
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () {
+        showQuickReactionPalette(
+          context: context,
+          onEmojiSelected: (emoji) {
+            ref
+                .read(reactionProvider.notifier)
+                .toggleReaction(
+                  messageUuid: message.uuid,
+                  messageSenderId: message.senderId,
+                  emoji: emoji,
+                  roomId: currentRoomId,
+                );
+          },
+        );
+      },
+    );
+  }
+
+  /// Build the reactions display
+  Widget _buildReactionsDisplay(
+    BuildContext context,
+    WidgetRef ref,
+    Color textColor,
+  ) {
+    final messageKey = '${message.uuid}_${message.senderId}';
+    final reactions = ref.watch(
+      reactionProvider.select(
+        (state) => state.reactionsByMessage[messageKey] ?? [],
+      ),
+    );
+
+    if (reactions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final settings = ref.watch(settingsProvider);
+    final currentUserId = settings.deviceId;
+    final roomState = ref.watch(roomProvider);
+    final currentRoomId = roomState.activeRoomId;
+
+    if (currentRoomId == null) return const SizedBox.shrink();
+
+    // Group reactions by emoji and count them
+    final Map<String, List<String>> reactionGroups = {};
+    for (final reaction in reactions) {
+      reactionGroups
+          .putIfAbsent(reaction.emoji, () => [])
+          .add(reaction.reactorDeviceId);
+    }
+
+    // Sort groups by earliest timestamp
+    final sortedEntries = reactionGroups.entries.toList()
+      ..sort((a, b) {
+        final aTime = reactions
+            .firstWhere((r) => r.emoji == a.key)
+            .timestampMicros;
+        final bTime = reactions
+            .firstWhere((r) => r.emoji == b.key)
+            .timestampMicros;
+        return aTime.compareTo(bTime);
+      });
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: sortedEntries.map((entry) {
+          final emoji = entry.key;
+          final reactorIds = entry.value;
+          final count = reactorIds.length;
+          final userReacted = reactorIds.contains(currentUserId);
+
+          return InkWell(
+            onTap: () {
+              // Toggle user's reaction
+              ref
+                  .read(reactionProvider.notifier)
+                  .toggleReaction(
+                    messageUuid: message.uuid,
+                    messageSenderId: message.senderId,
+                    emoji: emoji,
+                    roomId: currentRoomId,
+                  );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: userReacted
+                    ? Theme.of(context).colorScheme.primaryContainer
+                    : Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: userReacted
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.white.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 14)),
+                  if (count > 1) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      count.toString(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: userReacted
+                            ? Theme.of(context).colorScheme.primary
+                            : textColor,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }

@@ -109,6 +109,28 @@ class DatabaseService {
         created_at INTEGER NOT NULL
       )
     ''');
+
+    // Create message_reactions table
+    await db.execute('''
+      CREATE TABLE message_reactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_uuid TEXT NOT NULL,
+        message_sender_id TEXT NOT NULL,
+        reactor_device_id TEXT NOT NULL,
+        reactor_name TEXT NOT NULL,
+        emoji TEXT NOT NULL,
+        timestamp_micros INTEGER NOT NULL,
+        room_id TEXT NOT NULL,
+        UNIQUE(message_uuid, message_sender_id, reactor_device_id, room_id)
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX idx_reaction_message ON message_reactions(message_uuid, message_sender_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_reaction_room ON message_reactions(room_id)',
+    );
   }
 
   /// Insert a new message
@@ -261,6 +283,14 @@ class DatabaseService {
     final cutoffTimestamp =
         DateTime.now().microsecondsSinceEpoch - retentionMicros;
 
+    // First delete reactions for expired messages
+    await db.delete(
+      'message_reactions',
+      where: 'timestamp_micros < ?',
+      whereArgs: [cutoffTimestamp],
+    );
+
+    // Then delete the messages
     return await db.delete(
       MessageSchema.tableName,
       where: '${MessageSchema.columnTimestampMicros} < ?',
@@ -271,6 +301,15 @@ class DatabaseService {
   /// Delete a specific message by UUID and sender ID
   Future<int> deleteMessage(String uuid, String senderId) async {
     final db = await database;
+
+    // First delete reactions for this message
+    await db.delete(
+      'message_reactions',
+      where: 'message_uuid = ? AND message_sender_id = ?',
+      whereArgs: [uuid, senderId],
+    );
+
+    // Then delete the message
     return await db.delete(
       MessageSchema.tableName,
       where:
@@ -311,6 +350,15 @@ class DatabaseService {
   /// Clear all messages for a specific room
   Future<int> clearAllMessages(String roomId) async {
     final db = await database;
+
+    // First delete all reactions for this room
+    await db.delete(
+      'message_reactions',
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+    );
+
+    // Then delete all messages
     return await db.delete(
       MessageSchema.tableName,
       where: '${MessageSchema.columnRoomId} = ?',
@@ -321,6 +369,15 @@ class DatabaseService {
   /// Delete all messages for a specific room (used when leaving room)
   Future<int> deleteMessagesByRoom(String roomId) async {
     final db = await database;
+
+    // First delete all reactions for this room
+    await db.delete(
+      'message_reactions',
+      where: 'room_id = ?',
+      whereArgs: [roomId],
+    );
+
+    // Then delete all messages
     return await db.delete(
       MessageSchema.tableName,
       where: '${MessageSchema.columnRoomId} = ?',

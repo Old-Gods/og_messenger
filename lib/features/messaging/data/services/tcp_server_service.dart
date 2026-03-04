@@ -39,6 +39,8 @@ class TcpServerService {
       StreamController<Map<String, dynamic>>.broadcast();
   final StreamController<Map<String, dynamic>> _inviteAcceptResponseController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _reactionController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   bool _isRunning = false;
 
@@ -83,6 +85,10 @@ class TcpServerService {
   /// Stream of invite accept responses (with encrypted AES key)
   Stream<Map<String, dynamic>> get inviteAcceptResponseStream =>
       _inviteAcceptResponseController.stream;
+
+  /// Stream of reactions
+  Stream<Map<String, dynamic>> get reactionStream =>
+      _reactionController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -312,6 +318,38 @@ class TcpServerService {
           'device_id': json['device_id'] as String,
           'device_name': json['device_name'] as String,
         });
+        return;
+      }
+
+      // Check if this is a reaction
+      if (json['type'] == 'reaction') {
+        print('💬 Received reaction');
+        
+        // Decrypt reaction payload if encrypted
+        final isEncrypted = json['is_encrypted'] as bool? ?? false;
+        final roomId = json['room_id'] as String;
+        String payload = json['payload'] as String;
+        
+        if (isEncrypted) {
+          final aesKey = RoomService.instance.getRoomAesKey(roomId);
+          if (aesKey != null) {
+            try {
+              final securityService = SecurityService.instance;
+              payload = securityService.decryptMessageForRoom(payload, roomId);
+              print('🔓 Decrypted reaction for room: $roomId');
+            } catch (e) {
+              print('⚠️ Failed to decrypt reaction: $e');
+              return; // Discard reaction that fails decryption
+            }
+          } else {
+            print('⚠️ Cannot decrypt reaction for room $roomId - no AES key available');
+            return;
+          }
+        }
+        
+        // Parse decrypted payload
+        final reactionData = jsonDecode(payload) as Map<String, dynamic>;
+        _reactionController.add(reactionData);
         return;
       }
 
@@ -553,6 +591,71 @@ class TcpServerService {
       return true;
     } catch (e) {
       // Silently fail for typing indicators - they're not critical
+      return false;
+    }
+  }
+
+  /// Send a reaction to a peer
+  Future<bool> sendReaction({
+    required String peerAddress,
+    required int peerPort,
+    required String action, // 'add' or 'remove'
+    required String messageUuid,
+    required String messageSenderId,
+    required String reactorDeviceId,
+    required String reactorName,
+    required String emoji,
+    required int timestampMicros,
+    required String roomId,
+  }) async {
+    try {
+      // Create reaction payload
+      final reactionData = {
+        'action': action,
+        'message_uuid': messageUuid,
+        'message_sender_id': messageSenderId,
+        'reactor_device_id': reactorDeviceId,
+        'reactor_name': reactorName,
+        'emoji': emoji,
+        'timestamp_micros': timestampMicros,
+        'room_id': roomId,
+      };
+
+      // Encrypt reaction payload if in a room with AES key
+      final aesKey = RoomService.instance.getRoomAesKey(roomId);
+      String payloadToSend = jsonEncode(reactionData);
+      
+      if (aesKey != null) {
+        try {
+          final securityService = SecurityService.instance;
+          payloadToSend = securityService.encryptMessageForRoom(
+            payloadToSend,
+            roomId,
+          );
+          print('🔐 Encrypted reaction for room: $roomId');
+        } catch (e) {
+          print('⚠️ Failed to encrypt reaction: $e');
+          return false;
+        }
+      }
+
+      final message = {
+        'type': 'reaction',
+        'payload': payloadToSend,
+        'room_id': roomId,
+        'is_encrypted': aesKey != null,
+      };
+
+      final messageJson = jsonEncode(message);
+
+      final socket = await Socket.connect(peerAddress, peerPort);
+      socket.write('$messageJson\n');
+      await socket.flush();
+      await socket.close();
+
+      return true;
+    } catch (e) {
+      print('❌ Failed to send reaction to $peerAddress:$peerPort: $e');
       return false;
     }
   }

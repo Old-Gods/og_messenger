@@ -9,6 +9,7 @@ import '../domain/entities/message.dart';
 import '../data/repositories/message_repository.dart';
 import '../data/services/tcp_server_service.dart';
 import '../../rooms/providers/room_provider.dart';
+import '../../reactions/providers/reaction_provider.dart';
 
 /// Message state
 class MessageState {
@@ -1062,6 +1063,43 @@ class MessageNotifier extends Notifier<MessageState> {
       // Send each message
       for (final message in messagesToSync) {
         await _tcpServer.sendMessage(peerAddress, peerPort, message, networkId);
+      }
+
+      // Send reactions for synced messages
+      if (messagesToSync.isNotEmpty) {
+        final messageKeys = messagesToSync
+            .map((m) => '${m.uuid}_${m.senderId}')
+            .toList();
+        final reactionRepository = ref
+            .read(reactionProvider.notifier)
+            .repository;
+        final reactions = await reactionRepository.getReactionsForMessages(
+          messageKeys: messageKeys,
+          roomId: networkId,
+        );
+
+        // Flatten reactions map and send each reaction
+        int reactionCount = 0;
+        for (final reactionList in reactions.values) {
+          for (final reaction in reactionList) {
+            await _tcpServer.sendReaction(
+              peerAddress: peerAddress,
+              peerPort: peerPort,
+              action: 'add',
+              messageUuid: reaction.messageUuid,
+              messageSenderId: reaction.messageSenderId,
+              reactorDeviceId: reaction.reactorDeviceId,
+              reactorName: reaction.reactorName,
+              emoji: reaction.emoji,
+              timestampMicros: reaction.timestampMicros,
+              roomId: reaction.roomId,
+            );
+            reactionCount++;
+          }
+        }
+        if (reactionCount > 0) {
+          print('📤 Sent $reactionCount reactions with synced messages');
+        }
       }
 
       // TODO: Send sync_response with hasMore flag
