@@ -28,12 +28,10 @@ void main() {
       // Clean up any existing database first
       try {
         // Try to close any existing instance
-        if (DatabaseService.instance != null) {
-          try {
-            await DatabaseService.instance.close();
-          } catch (e) {
-            // Ignore close errors
-          }
+        try {
+          await DatabaseService.instance.close();
+        } catch (e) {
+          // Ignore close errors
         }
         await DatabaseService.instance.deleteDatabase();
       } catch (e) {
