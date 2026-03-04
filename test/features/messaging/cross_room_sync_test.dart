@@ -27,12 +27,20 @@ void main() {
 
       // Clean up any existing database first
       try {
+        // Try to close any existing instance
+        if (DatabaseService.instance != null) {
+          try {
+            await DatabaseService.instance.close();
+          } catch (e) {
+            // Ignore close errors
+          }
+        }
         await DatabaseService.instance.deleteDatabase();
       } catch (e) {
         // Ignore if database doesn't exist
       }
-      // Wait for file system to release handles (longer delay for CI)
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Wait longer for file system to release handles (extra time for CI)
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // Initialize services with fresh database
       database = DatabaseService.instance;
@@ -43,12 +51,21 @@ void main() {
       // Clean up - close and reset the database
       try {
         await database.close();
+      } catch (e) {
+        // Ignore errors during close
+      }
+      
+      // Extra delay before deletion
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      try {
         await DatabaseService.instance.deleteDatabase();
       } catch (e) {
-        // Ignore errors during cleanup
+        // Ignore errors during deletion
       }
-      // Wait for file system to release handles (longer delay for CI)
-      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Wait longer for file system to release handles (extra time for CI)
+      await Future.delayed(const Duration(milliseconds: 500));
     });
 
     test('Messages from different rooms are not cross-contaminated', () async {
