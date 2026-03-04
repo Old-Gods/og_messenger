@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import '../../../settings/providers/settings_provider.dart';
 import '../../../messaging/providers/message_provider.dart';
 import '../../../discovery/providers/discovery_provider.dart';
@@ -178,6 +179,208 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _showEmojiCustomizationDialog() async {
+    final settings = ref.read(settingsProvider);
+    final currentEmojis = List<String>.from(settings.reactionEmojis);
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Customize Quick Reactions'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Tap an emoji to remove it. Add button to add new emojis.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // Existing emojis
+                    ...currentEmojis.map((emoji) {
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            currentEmojis.remove(emoji);
+                          });
+                        },
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              Center(
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(fontSize: 28),
+                                ),
+                              ),
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    // Add button
+                    if (currentEmojis.length < 10)
+                      InkWell(
+                        onTap: () async {
+                          // Show emoji picker to add new emoji
+                          final emoji = await showDialog<String>(
+                            context: context,
+                            builder: (context) => Dialog(
+                              child: SizedBox(
+                                height: 400,
+                                child: Column(
+                                  children: [
+                                    AppBar(
+                                      title: const Text('Select Emoji'),
+                                      automaticallyImplyLeading: false,
+                                      actions: [
+                                        IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(),
+                                        ),
+                                      ],
+                                    ),
+                                    Expanded(
+                                      child: EmojiPicker(
+                                        onEmojiSelected: (category, emoji) {
+                                          Navigator.of(
+                                            context,
+                                          ).pop(emoji.emoji);
+                                        },
+                                        config: Config(
+                                          checkPlatformCompatibility: true,
+                                          emojiViewConfig: EmojiViewConfig(
+                                            columns: 7,
+                                            emojiSizeMax: 28,
+                                            verticalSpacing: 0,
+                                            horizontalSpacing: 0,
+                                            gridPadding: EdgeInsets.zero,
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).scaffoldBackgroundColor,
+                                          ),
+                                          skinToneConfig:
+                                              const SkinToneConfig(),
+                                          categoryViewConfig:
+                                              const CategoryViewConfig(),
+                                          bottomActionBarConfig:
+                                              const BottomActionBarConfig(
+                                                enabled: false,
+                                              ),
+                                          searchViewConfig:
+                                              const SearchViewConfig(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                          if (emoji != null && !currentEmojis.contains(emoji)) {
+                            setState(() {
+                              currentEmojis.add(emoji);
+                            });
+                          }
+                        },
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            size: 28,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (currentEmojis.length >= 10)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Maximum 10 emojis reached',
+                      style: TextStyle(fontSize: 12, color: Colors.orange),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (currentEmojis.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please keep at least one emoji'),
+                    ),
+                  );
+                  return;
+                }
+                await ref
+                    .read(settingsProvider.notifier)
+                    .setReactionEmojis(currentEmojis);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Quick reactions updated')),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
@@ -260,6 +463,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             subtitle: Text(_getThemeLabel(settings.themeMode)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showThemeDialog(),
+          ),
+          const Divider(),
+
+          // Reactions
+          const ListTile(
+            title: Text(
+              'Reactions',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.emoji_emotions),
+            title: const Text('Quick Reaction Emojis'),
+            subtitle: Text(settings.reactionEmojis.join(' ')),
+            trailing: const Icon(Icons.edit),
+            onTap: _showEmojiCustomizationDialog,
           ),
           const Divider(),
 

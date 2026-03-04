@@ -25,6 +25,7 @@ dependencies:
   asn1lib: ^1.5.5
   another_flushbar: ^1.12.30
   fuzzywuzzy: ^1.1.0
+  emoji_picker_flutter: ^4.4.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
