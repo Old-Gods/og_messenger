@@ -15,35 +15,48 @@ void main() {
 
     setUp(() async {
       dbService = DatabaseService.instance;
-      // Ensure clean state before each test
-      try {
-        await dbService.deleteDatabase();
-        // Wait for file system to release handles
-        await Future.delayed(const Duration(milliseconds: 200));
-      } catch (e) {
-        // Ignore if database doesn't exist
+
+      // Robust cleanup and initialization with retries
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          // Ensure clean state before each test
+          await dbService.deleteDatabase();
+          // Longer wait for file system to release handles (critical on Linux CI)
+          await Future.delayed(const Duration(milliseconds: 300));
+
+          // Initialize database by accessing it, then close and reopen
+          // This ensures the database is properly created with write permissions
+          await dbService.database;
+          await Future.delayed(const Duration(milliseconds: 100));
+          await dbService.close();
+          await Future.delayed(const Duration(milliseconds: 200));
+
+          // Re-access to ensure fresh writable connection
+          await dbService.database;
+          await Future.delayed(const Duration(milliseconds: 50));
+
+          // Success - break retry loop
+          break;
+        } catch (e) {
+          if (attempt == 2) rethrow; // Last attempt failed
+          // Wait before retrying
+          await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+        }
       }
-
-      // Initialize database by accessing it, then close and reopen
-      // This ensures the database is properly created with write permissions
-      await dbService.database;
-      await Future.delayed(const Duration(milliseconds: 50));
-      await dbService.close();
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Re-access to ensure fresh writable connection
-      await dbService.database;
     });
 
     tearDown(() async {
+      // Robust cleanup with longer delays
       try {
         // Close database connection before deleting
         await dbService.close();
-        await dbService.deleteDatabase();
-        // Wait for file system to release handles
         await Future.delayed(const Duration(milliseconds: 200));
+        await dbService.deleteDatabase();
+        // Longer wait for file system to fully release handles
+        await Future.delayed(const Duration(milliseconds: 300));
       } catch (e) {
-        // Ignore errors during cleanup
+        // Ignore errors during cleanup but wait anyway
+        await Future.delayed(const Duration(milliseconds: 300));
       }
     });
 
