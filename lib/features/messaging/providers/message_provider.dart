@@ -340,22 +340,27 @@ class MessageNotifier extends Notifier<MessageState> {
         50,
       );
 
-      final oldestTimestamp = messages.isNotEmpty
-          ? messages.first.timestampMicros
+      // Populate reply previews for messages that have reply references
+      final messagesWithPreviews = await _populateReplyPreviewsForMessages(
+        messages,
+      );
+
+      final oldestTimestamp = messagesWithPreviews.isNotEmpty
+          ? messagesWithPreviews.first.timestampMicros
           : null;
-      final newestTimestamp = messages.isNotEmpty
-          ? messages.last.timestampMicros
+      final newestTimestamp = messagesWithPreviews.isNotEmpty
+          ? messagesWithPreviews.last.timestampMicros
           : null;
 
       // Check if there are more older messages
-      final hasMoreOlder = messages.length == 50;
+      final hasMoreOlder = messagesWithPreviews.length == 50;
 
       print(
-        '📚 Loaded ${messages.length} initial messages from database (network: $networkId)',
+        '📚 Loaded ${messagesWithPreviews.length} initial messages from database (network: $networkId)',
       );
 
       state = MessageState(
-        messages: messages,
+        messages: messagesWithPreviews,
         isLoading: false,
         isInLiveMode: true,
         hasMoreOlder: hasMoreOlder,
@@ -403,10 +408,15 @@ class MessageNotifier extends Notifier<MessageState> {
         return;
       }
 
-      print('📚 Loaded ${olderMessages.length} older messages');
+      // Populate reply previews
+      final messagesWithPreviews = await _populateReplyPreviewsForMessages(
+        olderMessages,
+      );
+
+      print('📚 Loaded ${messagesWithPreviews.length} older messages');
 
       // Prepend older messages
-      final updatedMessages = [...olderMessages, ...state.messages];
+      final updatedMessages = [...messagesWithPreviews, ...state.messages];
 
       // Evict newest 25 messages if window exceeds 200
       if (updatedMessages.length > 200) {
@@ -479,10 +489,15 @@ class MessageNotifier extends Notifier<MessageState> {
         return;
       }
 
-      print('📚 Loaded ${newerMessages.length} newer messages');
+      // Populate reply previews
+      final messagesWithPreviews = await _populateReplyPreviewsForMessages(
+        newerMessages,
+      );
+
+      print('📚 Loaded ${messagesWithPreviews.length} newer messages');
 
       // Append newer messages
-      final updatedMessages = [...state.messages, ...newerMessages];
+      final updatedMessages = [...state.messages, ...messagesWithPreviews];
 
       // Evict oldest 25 messages if window exceeds 200
       if (updatedMessages.length > 200) {
@@ -632,21 +647,25 @@ class MessageNotifier extends Notifier<MessageState> {
         '💾 Saving new message: "${message.content}" from ${message.senderName}',
       );
 
+      // Populate reply preview if this message has a reply reference
+      final messageWithPreview = await _populateReplyPreview(message);
+
       // Only update window if in live mode
       if (state.isInLiveMode) {
         final updatedMessages = [...state.messages];
 
         // Fast path: check if we can just append (most common case)
         if (updatedMessages.isEmpty ||
-            updatedMessages.last.timestampMicros <= message.timestampMicros) {
-          updatedMessages.add(message);
+            updatedMessages.last.timestampMicros <=
+                messageWithPreview.timestampMicros) {
+          updatedMessages.add(messageWithPreview);
         } else {
           // Search backwards from the end to find insertion point
           int insertIndex = _findInsertIndexFromEnd(
             updatedMessages,
-            message.timestampMicros,
+            messageWithPreview.timestampMicros,
           );
-          updatedMessages.insert(insertIndex, message);
+          updatedMessages.insert(insertIndex, messageWithPreview);
         }
 
         // Evict oldest 25 messages if window exceeds 200
@@ -697,6 +716,101 @@ class MessageNotifier extends Notifier<MessageState> {
 
     // Message is older than all existing messages
     return 0;
+  }
+
+  /// Populate reply preview fields for a message if it has a reply reference
+  Future<Message> _populateReplyPreview(Message message) async {
+    print(
+      '🔍 _populateReplyPreview called for message ${message.uuid}, repliedToUuid: ${message.repliedToUuid}, previewContent: ${message.replyToPreviewContent}',
+    );
+
+    // If no reply reference, return as-is
+    if (message.repliedToUuid == null || message.repliedToSenderId == null) {
+      print('   No reply reference, returning as-is');
+      return message;
+    }
+
+    // If preview already populated (came from network), return as-is
+    if (message.replyToPreviewContent != null) {
+      print(
+        '✅ Reply preview already populated for message ${message.uuid}: "${message.replyToPreviewContent}"',
+      );
+      return message;
+    }
+
+    print(
+      '🔍 Fetching reply preview for message ${message.uuid} (replying to ${message.repliedToUuid})',
+    );
+
+    // First try to find the original message in current message list (faster and always up-to-date)
+    Message? originalMessage;
+    try {
+      originalMessage = state.messages.firstWhere(
+        (m) =>
+            m.uuid == message.repliedToUuid &&
+            m.senderId == message.repliedToSenderId,
+      );
+      print('✅ Found original message in current list');
+    } catch (e) {
+      // Not found in current list, try database
+      print('🔍 Original message not in current list, checking database...');
+    }
+
+    // If not found in current list, look up in database
+    if (originalMessage == null) {
+      try {
+        final roomState = ref.read(roomProvider);
+        final roomId =
+            message.roomId ?? roomState.activeRoomId ?? 'default_room';
+
+        originalMessage = await _repository.getMessageByUuid(
+          message.repliedToUuid!,
+          message.repliedToSenderId!,
+          roomId,
+        );
+
+        if (originalMessage != null) {
+          print('✅ Found original message in database');
+        }
+      } catch (e) {
+        print('⚠️ Failed to fetch from database: $e');
+      }
+    }
+
+    if (originalMessage != null) {
+      // Truncate content to 50 characters
+      final previewContent = originalMessage.content.length > 50
+          ? '${originalMessage.content.substring(0, 50)}...'
+          : originalMessage.content;
+
+      print(
+        '✅ Populated preview: "$previewContent" from ${originalMessage.senderName}',
+      );
+
+      return message.copyWith(
+        replyToPreviewContent: previewContent,
+        replyToPreviewSenderName: originalMessage.senderName,
+      );
+    } else {
+      print('⚠️ Original message not found: ${message.repliedToUuid}');
+    }
+
+    // If we couldn't fetch the original, return with a placeholder
+    return message.copyWith(
+      replyToPreviewContent: '[Message not found]',
+      replyToPreviewSenderName: 'Unknown',
+    );
+  }
+
+  /// Populate reply previews for a list of messages
+  Future<List<Message>> _populateReplyPreviewsForMessages(
+    List<Message> messages,
+  ) async {
+    final result = <Message>[];
+    for (final message in messages) {
+      result.add(await _populateReplyPreview(message));
+    }
+    return result;
   }
 
   /// Sync with all currently connected peers

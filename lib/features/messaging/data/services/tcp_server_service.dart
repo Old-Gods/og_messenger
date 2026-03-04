@@ -87,8 +87,7 @@ class TcpServerService {
       _inviteAcceptResponseController.stream;
 
   /// Stream of reactions
-  Stream<Map<String, dynamic>> get reactionStream =>
-      _reactionController.stream;
+  Stream<Map<String, dynamic>> get reactionStream => _reactionController.stream;
 
   /// Get the actual TCP port the server is listening on
   int? get actualPort => _actualPort;
@@ -324,12 +323,12 @@ class TcpServerService {
       // Check if this is a reaction
       if (json['type'] == 'reaction') {
         print('💬 Received reaction');
-        
+
         // Decrypt reaction payload if encrypted
         final isEncrypted = json['is_encrypted'] as bool? ?? false;
         final roomId = json['room_id'] as String;
         String payload = json['payload'] as String;
-        
+
         if (isEncrypted) {
           final aesKey = RoomService.instance.getRoomAesKey(roomId);
           if (aesKey != null) {
@@ -342,11 +341,13 @@ class TcpServerService {
               return; // Discard reaction that fails decryption
             }
           } else {
-            print('⚠️ Cannot decrypt reaction for room $roomId - no AES key available');
+            print(
+              '⚠️ Cannot decrypt reaction for room $roomId - no AES key available',
+            );
             return;
           }
         }
-        
+
         // Parse decrypted payload
         final reactionData = jsonDecode(payload) as Map<String, dynamic>;
         _reactionController.add(reactionData);
@@ -377,6 +378,10 @@ class TcpServerService {
               content: decryptedContent,
               isOutgoing: parsedMessage.isOutgoing,
               roomId: messageRoomId,
+              repliedToUuid: parsedMessage.repliedToUuid,
+              repliedToSenderId: parsedMessage.repliedToSenderId,
+              replyToPreviewContent: parsedMessage.replyToPreviewContent,
+              replyToPreviewSenderName: parsedMessage.replyToPreviewSenderName,
             );
             print('🔓 Decrypted message for room: $messageRoomId');
           } catch (e) {
@@ -428,6 +433,11 @@ class TcpServerService {
             senderName: message.senderName,
             content: encryptedContent,
             isOutgoing: message.isOutgoing,
+            roomId: message.roomId,
+            repliedToUuid: message.repliedToUuid,
+            repliedToSenderId: message.repliedToSenderId,
+            replyToPreviewContent: message.replyToPreviewContent,
+            replyToPreviewSenderName: message.replyToPreviewSenderName,
           );
           print('🔐 Encrypted message for room: $roomId');
         } catch (e) {
@@ -624,7 +634,7 @@ class TcpServerService {
       // Encrypt reaction payload if in a room with AES key
       final aesKey = RoomService.instance.getRoomAesKey(roomId);
       String payloadToSend = jsonEncode(reactionData);
-      
+
       if (aesKey != null) {
         try {
           final securityService = SecurityService.instance;
