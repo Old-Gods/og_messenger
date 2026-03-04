@@ -1005,11 +1005,19 @@ class _MessageBubble extends ConsumerWidget {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            // Message bubble with reaction button
+            // Message bubble with action buttons
             Row(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Own messages: reply button on left
+                if (isOwn) ...[
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [_buildReplyButton(context, ref)],
+                  ),
+                  const SizedBox(width: 4),
+                ],
                 // Message bubble
                 Flexible(
                   child: AnimatedContainer(
@@ -1100,19 +1108,17 @@ class _MessageBubble extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // Action buttons (reaction and reply) on right for received messages,
-                // on left for own messages
+                // Action buttons positioning based on message ownership
                 if (!isOwn) ...[
+                  // Other users' messages: buttons on right (reaction + reply)
                   const SizedBox(width: 4),
                   Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildReactionButton(context, ref),
                       _buildReplyButton(context, ref),
                     ],
                   ),
-                ] else ...[
-                  Column(children: [_buildReplyButton(context, ref)]),
-                  const SizedBox(width: 4),
                 ],
               ],
             ),
@@ -1199,7 +1205,8 @@ class _MessageBubble extends ConsumerWidget {
       icon: const Icon(Icons.add_reaction_outlined),
       iconSize: 20,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      visualDensity: VisualDensity.compact,
       onPressed: () {
         showQuickReactionPalette(
           context: context,
@@ -1224,7 +1231,8 @@ class _MessageBubble extends ConsumerWidget {
       icon: const Icon(Icons.reply),
       iconSize: 20,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      visualDensity: VisualDensity.compact,
       onPressed: () {
         ref.read(replyProvider.notifier).setReply(message);
       },
