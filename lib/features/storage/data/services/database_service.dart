@@ -10,10 +10,18 @@ import '../../../rooms/domain/entities/invite_request.dart';
 
 /// SQLite database service for managing message and room storage
 class DatabaseService {
-  static Database? _database;
+  Database? _database;
+  final String? _customDatabaseName;
+
   static final DatabaseService instance = DatabaseService._();
 
-  DatabaseService._();
+  DatabaseService._({String? customDatabaseName})
+    : _customDatabaseName = customDatabaseName;
+
+  /// Factory constructor for test instances with custom database names
+  factory DatabaseService.forTest(String testName) {
+    return DatabaseService._(customDatabaseName: '${testName}_test.db');
+  }
 
   /// Get database instance, initializing if needed
   Future<Database> get database async {
@@ -25,7 +33,8 @@ class DatabaseService {
   /// Initialize the database
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.databaseName);
+    final dbName = _customDatabaseName ?? AppConstants.databaseName;
+    final path = join(dbPath, dbName);
 
     return await openDatabase(
       path,
@@ -580,9 +589,10 @@ class DatabaseService {
 
   /// Close the database
   Future<void> close() async {
-    final db = await database;
-    await db.close();
-    _database = null;
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
   }
 
   /// Delete the database file (for testing)
@@ -591,7 +601,8 @@ class DatabaseService {
       await close();
     }
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, AppConstants.databaseName);
+    final dbName = _customDatabaseName ?? AppConstants.databaseName;
+    final path = join(dbPath, dbName);
     await databaseFactory.deleteDatabase(path);
     _database = null;
   }

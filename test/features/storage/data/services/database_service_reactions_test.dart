@@ -4,7 +4,7 @@ import 'package:og_messenger/features/storage/data/services/database_service.dar
 
 void main() {
   // Initialize sqflite for testing
-  setUpAll(() {
+  setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
@@ -12,7 +12,24 @@ void main() {
   late DatabaseService databaseService;
 
   setUp(() async {
-    databaseService = DatabaseService.instance;
+    // Create a unique database instance for these tests
+    databaseService = DatabaseService.forTest('reactions');
+    
+    // Clean up any existing test database
+    try {
+      await databaseService.deleteDatabase();
+    } catch (_) {
+      // Ignore if database doesn't exist
+    }
+    
+    // Initialize fresh database
+    await databaseService.database;
+  });
+
+  tearDown(() async {
+    // Clean up after each test
+    await databaseService.close();
+    await databaseService.deleteDatabase();
   });
 
   group('DatabaseService - Reactions', () {
