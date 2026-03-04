@@ -54,16 +54,16 @@ void main() {
       } catch (e) {
         // Ignore errors during close
       }
-      
+
       // Extra delay before deletion
       await Future.delayed(const Duration(milliseconds: 100));
-      
+
       try {
         await DatabaseService.instance.deleteDatabase();
       } catch (e) {
         // Ignore errors during deletion
       }
-      
+
       // Wait longer for file system to release handles (extra time for CI)
       await Future.delayed(const Duration(milliseconds: 500));
     });
