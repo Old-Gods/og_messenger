@@ -29,14 +29,28 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3, // V3: Multi-room architecture
+      version: 4, // V4: Reply feature
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Handle database upgrades
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 4) {
+      // V3 -> V4: Add reply columns to messages table
+      await db.execute('''
+        ALTER TABLE messages ADD COLUMN replied_to_uuid TEXT
+      ''');
+      await db.execute('''
+        ALTER TABLE messages ADD COLUMN replied_to_sender_id TEXT
+      ''');
+    }
   }
 
   /// Create database tables (fresh start, no migration)
   Future<void> _onCreate(Database db, int version) async {
-    // Create messages table with room_id
+    // Create messages table with room_id and reply support
     await db.execute('''
       CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +59,9 @@ class DatabaseService {
         sender_id TEXT NOT NULL,
         sender_name TEXT NOT NULL,
         content TEXT NOT NULL,
-        room_id TEXT NOT NULL
+        room_id TEXT NOT NULL,
+        replied_to_uuid TEXT,
+        replied_to_sender_id TEXT
       )
     ''');
 

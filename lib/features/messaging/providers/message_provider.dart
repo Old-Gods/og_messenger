@@ -189,6 +189,40 @@ final typingIndicatorProvider =
       () => TypingIndicatorNotifier(),
     );
 
+/// Reply state - tracks the message being replied to
+class ReplyState {
+  final Message? replyingTo;
+
+  const ReplyState({this.replyingTo});
+
+  ReplyState copyWith({Message? replyingTo}) {
+    return ReplyState(replyingTo: replyingTo);
+  }
+}
+
+/// Reply notifier - manages which message is being replied to
+class ReplyNotifier extends Notifier<ReplyState> {
+  @override
+  ReplyState build() {
+    return const ReplyState();
+  }
+
+  /// Set the message to reply to
+  void setReply(Message message) {
+    state = ReplyState(replyingTo: message);
+  }
+
+  /// Clear the current reply
+  void clearReply() {
+    state = const ReplyState();
+  }
+}
+
+/// Provider for reply state - separate from message state
+final replyProvider = NotifierProvider<ReplyNotifier, ReplyState>(
+  () => ReplyNotifier(),
+);
+
 /// Message notifier
 class MessageNotifier extends Notifier<MessageState> {
   late MessageRepository _repository;
@@ -1204,9 +1238,31 @@ class MessageNotifier extends Notifier<MessageState> {
       return;
     }
 
+    // Get reply state if replying to a message
+    final replyState = ref.read(replyProvider);
+    final replyingTo = replyState.replyingTo;
+
     try {
       // Create message with UUIDv7
       const uuid = Uuid();
+
+      // Prepare reply fields if replying
+      String? repliedToUuid;
+      String? repliedToSenderId;
+      String? replyToPreviewContent;
+      String? replyToPreviewSenderName;
+
+      if (replyingTo != null) {
+        repliedToUuid = replyingTo.uuid;
+        repliedToSenderId = replyingTo.senderId;
+        // Truncate to 50 characters for preview
+        final truncatedContent = replyingTo.content.length > 50
+            ? '${replyingTo.content.substring(0, 50)}...'
+            : replyingTo.content;
+        replyToPreviewContent = truncatedContent;
+        replyToPreviewSenderName = replyingTo.senderName;
+      }
+
       final message = Message(
         uuid: uuid.v7(),
         timestampMicros: DateTime.now().microsecondsSinceEpoch,
@@ -1214,9 +1270,20 @@ class MessageNotifier extends Notifier<MessageState> {
         senderName: userName,
         content: content,
         isOutgoing: true,
+        repliedToUuid: repliedToUuid,
+        repliedToSenderId: repliedToSenderId,
+        replyToPreviewContent: replyToPreviewContent,
+        replyToPreviewSenderName: replyToPreviewSenderName,
       );
 
-      print('📤 Sending message: "$content"');
+      print(
+        '📤 Sending message: "$content"${replyingTo != null ? ' (reply to ${replyingTo.senderName})' : ''}',
+      );
+
+      // Clear reply state
+      if (replyingTo != null) {
+        ref.read(replyProvider.notifier).clearReply();
+      }
 
       // Save to database first
       final roomState = ref.read(roomProvider);

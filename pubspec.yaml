@@ -26,6 +26,7 @@ dependencies:
   another_flushbar: ^1.12.30
   fuzzywuzzy: ^1.1.0
   emoji_picker_flutter: ^4.4.0
+  scrollable_positioned_list: ^0.3.8
 dev_dependencies:
   flutter_test:
     sdk: flutter

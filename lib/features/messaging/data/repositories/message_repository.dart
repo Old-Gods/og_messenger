@@ -22,6 +22,8 @@ class MessageRepository {
       senderName: message.senderName,
       content: message.content,
       roomId: roomId,
+      repliedToUuid: message.repliedToUuid,
+      repliedToSenderId: message.repliedToSenderId,
     );
 
     try {
@@ -39,17 +41,9 @@ class MessageRepository {
     String networkId,
   ) async {
     final schemas = await _database.getAllMessages(networkId);
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get the most recent N messages (for initial load)
@@ -59,17 +53,9 @@ class MessageRepository {
     int limit,
   ) async {
     final schemas = await _database.getInitialMessages(networkId, limit);
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get messages before a specific timestamp (for loading older messages)
@@ -84,17 +70,9 @@ class MessageRepository {
       beforeTimestamp,
       limit,
     );
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get messages after a specific timestamp with limit (for loading newer messages)
@@ -109,17 +87,9 @@ class MessageRepository {
       afterTimestamp,
       limit,
     );
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get messages from a specific sender on a specific network
@@ -129,17 +99,9 @@ class MessageRepository {
     String networkId,
   ) async {
     final schemas = await _database.getMessagesBySender(senderId, networkId);
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get messages after a specific timestamp for a specific network
@@ -152,17 +114,9 @@ class MessageRepository {
       timestampMicros,
       networkId,
     );
-    return schemas.map((schema) {
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: schema.senderId == localDeviceId,
-        roomId: schema.roomId,
-      );
-    }).toList();
+    return schemas
+        .map((schema) => _schemaToMessage(schema, localDeviceId))
+        .toList();
   }
 
   /// Get the latest message timestamp for a specific network
@@ -190,15 +144,10 @@ class MessageRepository {
       final schema = await _database.getMessageByUuid(uuid, senderId, roomId);
       if (schema == null) return null;
 
-      return Message(
-        uuid: schema.uuid,
-        timestampMicros: schema.timestampMicros,
-        senderId: schema.senderId,
-        senderName: schema.senderName,
-        content: schema.content,
-        isOutgoing: false, // Not relevant for duplicate check
-        roomId: schema.roomId,
-      );
+      return _schemaToMessage(
+        schema,
+        senderId,
+      ); // Use senderId as localDeviceId for isOutgoing check
     } catch (e) {
       return null;
     }
@@ -221,5 +170,22 @@ class MessageRepository {
     String networkId,
   ) async {
     return await _database.updateSenderName(senderId, newName, networkId);
+  }
+
+  /// Helper method to convert MessageSchema to Message entity
+  Message _schemaToMessage(MessageSchema schema, String localDeviceId) {
+    return Message(
+      uuid: schema.uuid,
+      timestampMicros: schema.timestampMicros,
+      senderId: schema.senderId,
+      senderName: schema.senderName,
+      content: schema.content,
+      isOutgoing: schema.senderId == localDeviceId,
+      roomId: schema.roomId,
+      repliedToUuid: schema.repliedToUuid,
+      repliedToSenderId: schema.repliedToSenderId,
+      // Note: replyToPreviewContent and replyToPreviewSenderName are not stored in DB
+      // They will be null when loading from DB - that's OK, the UI will fetch if needed
+    );
   }
 }

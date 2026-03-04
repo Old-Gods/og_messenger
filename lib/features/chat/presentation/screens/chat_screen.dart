@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../../core/constants/network_constants.dart';
 import '../../../../core/utils/color_utils.dart';
 import '../../../../core/utils/dialog_utils.dart';
@@ -25,7 +26,9 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen>
     with WidgetsBindingObserver {
   final _messageController = TextEditingController();
-  final _scrollController = ScrollController();
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener =
+      ItemPositionsListener.create();
   final _messageFocusNode = FocusNode();
   bool _isInitialized = false;
   bool _isInitializing = false;
@@ -33,6 +36,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   DateTime? _lastTypingIndicatorSent;
   Timer? _typingThrottleTimer;
   final Set<String> _shownJoinRequests = {}; // Track which requests we've shown
+  String? _highlightedMessageKey; // For highlighting scrolled-to messages
 
   @override
   void initState() {
@@ -40,7 +44,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     WidgetsBinding.instance.addObserver(this);
     _initializeServices();
     // Add scroll listener for pagination
-    _scrollController.addListener(_onScroll);
+    _itemPositionsListener.itemPositions.addListener(_onScroll);
     // Scroll to bottom after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
@@ -49,48 +53,107 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
-    _scrollController.dispose();
     _messageFocusNode.dispose();
     _typingThrottleTimer?.cancel();
     super.dispose();
   }
 
   void _scrollToBottom({bool animate = true}) {
-    if (!_scrollController.hasClients) return;
+    if (!_itemScrollController.isAttached) return;
 
     // With reverse: true, position 0 is at the bottom (newest messages)
     if (animate) {
-      _scrollController.animateTo(
-        0,
+      _itemScrollController.scrollTo(
+        index: 0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     } else {
-      _scrollController.jumpTo(0);
+      _itemScrollController.jumpTo(index: 0);
     }
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients) return;
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
 
     final messageNotifier = ref.read(messageProvider.notifier);
     final messageState = ref.read(messageProvider);
 
-    // Load older messages when scrolling to bottom (top in reverse view)
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 100) {
+    // Get the visible items
+    final topIndex = positions
+        .where((pos) => pos.itemTrailingEdge > 0)
+        .reduce((a, b) => a.index > b.index ? a : b)
+        .index;
+
+    final bottomIndex = positions
+        .where((pos) => pos.itemLeadingEdge < 1)
+        .reduce((a, b) => a.index < b.index ? a : b)
+        .index;
+
+    final messageCount = messageState.messages.length;
+
+    // Load older messages when scrolling near the end (high indices in reversed list)
+    if (topIndex >= messageCount - 5) {
       if (messageState.hasMoreOlder && !messageState.isLoadingMore) {
         messageNotifier.loadOlderMessages();
       }
     }
 
-    // Load newer messages when scrolling to top (bottom in reverse view)
-    if (_scrollController.position.pixels <=
-        _scrollController.position.minScrollExtent + 100) {
+    // Load newer messages when scrolling near the beginning (low indices)
+    if (bottomIndex <= 5) {
       if (messageState.hasMoreNewer && !messageState.isLoadingNewer) {
         messageNotifier.loadNewerMessages();
       }
     }
+  }
+
+  /// Scroll to a specific message and highlight it
+  void _scrollToMessage(String uuid, String senderId) {
+    final messageState = ref.read(messageProvider);
+    final index = messageState.messages.indexWhere(
+      (m) => m.uuid == uuid && m.senderId == senderId,
+    );
+
+    if (index == -1) {
+      // Message not found
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Message not found in current view'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Reverse index since list is reversed
+    final reversedIndex = messageState.messages.length - 1 - index;
+
+    // Scroll to the message
+    if (_itemScrollController.isAttached) {
+      _itemScrollController.scrollTo(
+        index: reversedIndex,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+
+    // Highlight the message
+    final messageKey = '${uuid}_$senderId';
+    setState(() {
+      _highlightedMessageKey = messageKey;
+    });
+
+    // Remove highlight after animation
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _highlightedMessageKey = null;
+        });
+      }
+    });
   }
 
   Future<void> _initializeServices() async {
@@ -632,8 +695,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       ],
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
+                : ScrollablePositionedList.builder(
+                    itemScrollController: _itemScrollController,
+                    itemPositionsListener: _itemPositionsListener,
                     reverse: true,
                     padding: const EdgeInsets.all(8),
                     itemCount:
@@ -678,13 +742,94 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       final reversedIndex =
                           messageState.messages.length - 1 - messageIndex;
                       final message = messageState.messages[reversedIndex];
+                      final messageKey = '${message.uuid}_${message.senderId}';
                       return _MessageBubble(
                         message: message,
                         isOwn: message.senderId == settings.deviceId,
                         onlineMemberIds: onlineMemberIds,
+                        isHighlighted: _highlightedMessageKey == messageKey,
+                        onScrollToMessage: _scrollToMessage,
                       );
                     },
                   ),
+          ),
+
+          // Reply preview - separate Consumer to avoid rebuilding TextField
+          Consumer(
+            builder: (context, ref, child) {
+              final replyState = ref.watch(replyProvider);
+              if (replyState.replyingTo == null) {
+                return const SizedBox.shrink();
+              }
+
+              final replyingTo = replyState.replyingTo!;
+              final previewContent = replyingTo.content.length > 50
+                  ? '${replyingTo.content.substring(0, 50)}...'
+                  : replyingTo.content;
+
+              return Container(
+                margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border(
+                    left: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 4,
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Replying to ${replyingTo.senderName}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            previewContent,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      iconSize: 20,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      onPressed: () {
+                        ref.read(replyProvider.notifier).clearReply();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           // Typing indicator - separate Consumer to avoid rebuilding TextField
@@ -770,11 +915,15 @@ class _MessageBubble extends ConsumerWidget {
   final dynamic message;
   final bool isOwn;
   final Set<String> onlineMemberIds;
+  final bool isHighlighted;
+  final void Function(String uuid, String senderId) onScrollToMessage;
 
   const _MessageBubble({
     required this.message,
     required this.isOwn,
     required this.onlineMemberIds,
+    this.isHighlighted = false,
+    required this.onScrollToMessage,
   });
 
   @override
@@ -863,7 +1012,8 @@ class _MessageBubble extends ConsumerWidget {
               children: [
                 // Message bubble
                 Flexible(
-                  child: Container(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
                     padding: const EdgeInsets.symmetric(
                       vertical: 10,
                       horizontal: 14,
@@ -871,6 +1021,23 @@ class _MessageBubble extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: backgroundColor,
                       borderRadius: BorderRadius.circular(18),
+                      border: isHighlighted
+                          ? Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 2,
+                            )
+                          : null,
+                      boxShadow: isHighlighted
+                          ? [
+                              BoxShadow(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -913,6 +1080,10 @@ class _MessageBubble extends ConsumerWidget {
                               ],
                             ),
                           ),
+                        // Reply preview if this message is a reply
+                        if (message.repliedToUuid != null &&
+                            message.replyToPreviewContent != null)
+                          _buildReplyQuote(context, textColor),
                         SelectableText(
                           message.content,
                           style: TextStyle(color: textColor, fontSize: 16),
@@ -929,15 +1100,74 @@ class _MessageBubble extends ConsumerWidget {
                     ),
                   ),
                 ),
+                // Action buttons (reaction and reply) on right for received messages,
+                // on left for own messages
                 if (!isOwn) ...[
-                  // Reaction button on right for received messages only
                   const SizedBox(width: 4),
-                  _buildReactionButton(context, ref),
+                  Column(
+                    children: [
+                      _buildReactionButton(context, ref),
+                      _buildReplyButton(context, ref),
+                    ],
+                  ),
+                ] else ...[
+                  Column(children: [_buildReplyButton(context, ref)]),
+                  const SizedBox(width: 4),
                 ],
               ],
             ),
             // Reactions display
             _buildReactionsDisplay(context, ref, textColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build reply preview quote widget
+  Widget _buildReplyQuote(BuildContext context, Color textColor) {
+    final previewContent = message.replyToPreviewContent!;
+    final previewSenderName = message.replyToPreviewSenderName ?? 'Unknown';
+
+    return InkWell(
+      onTap: () {
+        if (message.repliedToUuid != null &&
+            message.repliedToSenderId != null) {
+          onScrollToMessage(message.repliedToUuid!, message.repliedToSenderId!);
+        }
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.15),
+          border: Border(
+            left: BorderSide(color: textColor.withValues(alpha: 0.5), width: 3),
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              previewSenderName,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: textColor.withValues(alpha: 0.9),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              previewContent,
+              style: TextStyle(
+                fontSize: 11,
+                color: textColor.withValues(alpha: 0.7),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -984,6 +1214,19 @@ class _MessageBubble extends ConsumerWidget {
                 );
           },
         );
+      },
+    );
+  }
+
+  /// Build the reply button
+  Widget _buildReplyButton(BuildContext context, WidgetRef ref) {
+    return IconButton(
+      icon: const Icon(Icons.reply),
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      onPressed: () {
+        ref.read(replyProvider.notifier).setReply(message);
       },
     );
   }
