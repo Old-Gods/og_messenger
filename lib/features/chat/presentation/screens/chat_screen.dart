@@ -315,109 +315,112 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
           return Container(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activeRoom.roomName,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Created by ${activeRoom.creatorName}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                const Divider(height: 32),
-                Text(
-                  'Online Members (${onlineMembers.length})',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (onlineMembers.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'No members online',
-                      style: TextStyle(color: Colors.grey[600]),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activeRoom.roomName,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: onlineMembers.length,
-                      itemBuilder: (context, index) {
-                        final member = onlineMembers[index];
-                        return ListTile(
-                          leading: const CircleAvatar(
-                            child: Icon(Icons.person, size: 20),
-                          ),
-                          title: Text(member.deviceName),
-                          trailing: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Created by ${activeRoom.creatorName}',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                  const Divider(height: 32),
+                  Text(
+                    'Online Members (${onlineMembers.length})',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (onlineMembers.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No members online',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: onlineMembers.length,
+                        itemBuilder: (context, index) {
+                          final member = onlineMembers[index];
+                          return ListTile(
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.person, size: 20),
                             ),
-                          ),
-                        );
-                      },
+                            title: Text(member.deviceName),
+                            trailing: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                // Invite button (only show if there are non-member users online)
-                if (nonMemberUsers.isNotEmpty) ...[
+                  // Invite button (only show if there are non-member users online)
+                  if (nonMemberUsers.isNotEmpty) ...[
+                    const Divider(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => InviteUserModal(
+                                roomId: activeRoom.roomId,
+                                onlineMembers: onlineMembers,
+                                onlineUsers: nonMemberUsers,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Invite Members'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                   const Divider(height: 32),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => InviteUserModal(
-                              roomId: activeRoom.roomId,
-                              onlineMembers: onlineMembers,
-                              onlineUsers: nonMemberUsers,
-                            ),
-                          ),
-                        );
+                        _leaveRoom(activeRoom.roomId);
                       },
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Invite Members'),
+                      icon: const Icon(Icons.exit_to_app),
+                      label: const Text('Leave Room'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                       ),
                     ),
                   ),
                 ],
-                const Divider(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _leaveRoom(activeRoom.roomId);
-                    },
-                    icon: const Icon(Icons.exit_to_app),
-                    label: const Text('Leave Room'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -668,31 +671,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 ? const Center(child: CircularProgressIndicator())
                 : messageState.messages.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          Theme.of(context).brightness == Brightness.dark
-                              ? 'images/og_messenger.dark.png'
-                              : 'images/og_messenger.png',
-                          width: 128,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No messages yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            Theme.of(context).brightness == Brightness.dark
+                                ? 'images/og_messenger.dark.png'
+                                : 'images/og_messenger.png',
+                            width: 128,
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          onlineMembers.isEmpty
-                              ? 'Waiting for members to come online...'
-                              : 'Start a conversation!',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          Text(
+                            'No messages yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            onlineMembers.isEmpty
+                                ? 'Waiting for members to come online...'
+                                : 'Start a conversation!',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : ScrollablePositionedList.builder(
