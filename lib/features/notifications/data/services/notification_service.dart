@@ -76,10 +76,18 @@ class NotificationService {
   Future<bool> requestPermissions() async {
     if (!_initialized) await initialize();
 
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS) {
       final result = await _plugin
           .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+      _permissionGranted = result ?? false;
+      return _permissionGranted;
+    } else if (Platform.isMacOS) {
+      final result = await _plugin
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
           >()
           ?.requestPermissions(alert: true, badge: true, sound: true);
       _permissionGranted = result ?? false;
