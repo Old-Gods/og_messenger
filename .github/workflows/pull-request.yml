@@ -13,9 +13,8 @@ jobs:
     outputs:
       version: ${{ steps.set-version.outputs.version }}
     steps:
-      - run: echo "author_association=${{ github.event.pull_request.author_association }}"
       - id: set-version
-        run: |
+        run: | # shell
           VERSION="${{ github.head_ref }}"
           echo "version=${VERSION//\//-}" >> $GITHUB_OUTPUT
 
