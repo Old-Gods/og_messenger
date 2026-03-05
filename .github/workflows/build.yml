@@ -33,10 +33,7 @@ jobs:
           distribution: "zulu"
           java-version: "17"
           cache: "gradle"
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          cache: true
+      - uses: ./.github/actions/install
       - if: env.has-secrets
         uses: ./.github/actions/configure-android-signing
         with:
@@ -44,7 +41,6 @@ jobs:
           keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
           key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-      - run: flutter pub get
       - uses: ./.github/actions/build-apk
         with:
           filename: ${{ env.APK_NAME }}
@@ -69,15 +65,10 @@ jobs:
       BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.zip
     steps:
       - uses: actions/checkout@v6
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/install
+      - uses: ./.github/actions/build-ios
         with:
-          channel: "stable"
-          cache: true
-      - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
-      - run: | # shell
-          cd build/ios/iphoneos
-          zip -r "../../../$BUILD_NAME" Runner.app
+          filename: ${{ env.BUILD_NAME }}
       - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
@@ -93,15 +84,10 @@ jobs:
       - run: | # shell
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/install
+      - uses: ./.github/actions/build-linux
         with:
-          channel: "stable"
-          cache: true
-      - run: flutter pub get
-      - run: flutter build linux --release
-      - run: | # shell
-          cd build/linux/x64/release/bundle
-          tar -czf "../../../../../$BUILD_NAME" *
+          filename: ${{ env.BUILD_NAME }}
       - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
@@ -114,19 +100,10 @@ jobs:
       BUILD_NAME: OG-Messenger-macos-${{ inputs.version }}.dmg
     steps:
       - uses: actions/checkout@v6
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/install
+      - uses: ./.github/actions/build-dmg
         with:
-          channel: "stable"
-          cache: true
-      - run: flutter pub get
-      - run: flutter build macos --release
-      - run: | # shell
-          hdiutil create \
-            -volname "OG Messenger" \
-            -srcfolder "build/macos/Build/Products/Release/OG Messenger.app" \
-            -ov \
-            -format UDZO \
-            "${{ env.BUILD_NAME }}"
+          filename: ${{ env.BUILD_NAME }}
       - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:
@@ -139,13 +116,10 @@ jobs:
       BUILD_NAME: OG-Messenger-Windows-${{ inputs.version }}.zip
     steps:
       - uses: actions/checkout@v6
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/install
+      - uses: ./.github/actions/build-windows
         with:
-          channel: "stable"
-          cache: true
-      - run: flutter pub get
-      - run: flutter build windows --release
-      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ env.BUILD_NAME }}
+          filename: ${{ env.BUILD_NAME }}
       - if: env.has-secrets
         uses: actions/upload-artifact@v7
         with:

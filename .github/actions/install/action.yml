@@ -1,0 +1,14 @@
+name: Install
+
+description: Installs flutter and dependencies
+
+runs:
+  using: composite
+  steps:
+    - uses: subosito/flutter-action@v2
+      with:
+        channel: "stable"
+        cache: true
+    - shell: bash
+      run: flutter pub get
+

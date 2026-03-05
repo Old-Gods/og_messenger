@@ -1,0 +1,17 @@
+name: Build iOS
+description: Build the iOS app
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: flutter build ios --release --no-codesign
+    - shell: bash
+      run: | # shell
+        cd build/ios/iphoneos
+        zip -r "../../../${{ inputs.filename }}" Runner.app

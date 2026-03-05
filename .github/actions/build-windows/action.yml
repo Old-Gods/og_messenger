@@ -1,0 +1,15 @@
+name: Build Windows
+description: Builds the Windows app
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: flutter build windows --release
+    - shell: bash
+      run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ inputs.filename }}

@@ -1,0 +1,18 @@
+name: Build Linux
+description: Builds the linux app
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: flutter build linux --release
+    - shell: bash
+      run: | # shell
+        cd build/linux/x64/release/bundle
+        tar -czf "../../../../../${{ inputs.filename }}" *
+

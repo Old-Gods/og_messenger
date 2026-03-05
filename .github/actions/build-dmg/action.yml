@@ -1,0 +1,22 @@
+name: Build DMG
+description: Builds a macos DMG
+
+inputs:
+  filename:
+    description: The filename to create
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: flutter build macos --release
+    - shell: bash
+      run: | # shell
+        hdiutil create \
+          -volname "OG Messenger" \
+          -srcfolder "build/macos/Build/Products/Release/OG Messenger.app" \
+          -ov \
+          -format UDZO \
+          "${{ inputs.filename }}"
+
