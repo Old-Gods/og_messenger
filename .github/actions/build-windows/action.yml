@@ -9,7 +9,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - shell: bash
+    - shell: powershell
       run: flutter build windows --release
-    - shell: bash
+    - shell: powershell
       run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ inputs.filename }}
