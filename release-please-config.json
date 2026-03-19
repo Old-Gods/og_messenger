@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/891bcf6253b390e39df9ff3e1c059a836bd39c98/schemas/config.json",
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "draft": true,
   "force-tag-creation": true,
   "packages": {
