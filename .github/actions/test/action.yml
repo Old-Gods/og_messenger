@@ -1,0 +1,11 @@
+name: Test
+
+description: Runs the test suite
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: flutter analyze --fatal-infos
+    - shell: bash
+      run: flutter test
