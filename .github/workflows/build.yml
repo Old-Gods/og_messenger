@@ -18,7 +18,7 @@ on:
         description: The key alias to use
 
 env:
-  has-secrets: ${{ secrets.ANDROID_KEY_ALIAS }} != ''
+  has-secrets: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
 
 jobs:
   build-android:
@@ -34,7 +34,7 @@ jobs:
           java-version: "17"
           cache: "gradle"
       - uses: ./.github/actions/install
-      - if: env.has-secrets
+      - if: env.has-secrets == 'true'
         uses: ./.github/actions/configure-android-signing
         with:
           keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -44,8 +44,8 @@ jobs:
       - uses: ./.github/actions/build-apk
         with:
           filename: ${{ env.APK_NAME }}
-          type: ${{ env.has-secrets && 'release' || 'debug' }}
-      - if: env.has-secrets
+          type: ${{ env.has-secrets == 'true' && 'release' || 'debug' }}
+      - if: env.has-secrets == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: build-apk
@@ -69,7 +69,7 @@ jobs:
       - uses: ./.github/actions/build-ios
         with:
           filename: ${{ env.BUILD_NAME }}
-      - if: env.has-secrets
+      - if: env.has-secrets == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: build-ios
@@ -88,7 +88,7 @@ jobs:
       - uses: ./.github/actions/build-linux
         with:
           filename: ${{ env.BUILD_NAME }}
-      - if: env.has-secrets
+      - if: env.has-secrets == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: build-linux
@@ -104,7 +104,7 @@ jobs:
       - uses: ./.github/actions/build-dmg
         with:
           filename: ${{ env.BUILD_NAME }}
-      - if: env.has-secrets
+      - if: env.has-secrets == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: build-macos
@@ -120,7 +120,7 @@ jobs:
       - uses: ./.github/actions/build-windows
         with:
           filename: ${{ env.BUILD_NAME }}
-      - if: env.has-secrets
+      - if: env.has-secrets == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: build-windows

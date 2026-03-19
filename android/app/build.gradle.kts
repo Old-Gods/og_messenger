@@ -61,8 +61,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Use release signing configuration
-            signingConfig = signingConfigs.getByName("release")
+            // Use release signing if keystore exists, otherwise fall back to debug signing
+            val storeFilePath = keystoreProperties["storeFile"] as String?
+            signingConfig = if (storeFilePath != null && file(storeFilePath).exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

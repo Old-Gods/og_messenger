@@ -26,7 +26,7 @@ runs:
         KEYSTORE_PATH: ${{ github.workspace }}/android/app/upload-keystore.jks
         KEY_PASSWORD: ${{ inputs.key-password }}
         KEY_ALIAS: ${{ inputs.key-alias }}
-      run: |
+      run: | # shell
         echo "$KEYSTORE_BASE64" | base64 --decode > $KEYSTORE_PATH
         cat > android/key.properties << EOF
         storePassword=$KEYSTORE_PASSWORD
