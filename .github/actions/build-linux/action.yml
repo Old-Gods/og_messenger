@@ -12,7 +12,5 @@ runs:
     - shell: bash
       run: flutter build linux --release
     - shell: bash
-      run: | # shell
-        cd build/linux/x64/release/bundle
-        tar -czf "../../../../../${{ inputs.filename }}" *
-
+      working-directory: build/linux/x64/release/bundle
+      run: tar -czf "../../../../../${{ inputs.filename }}" *
