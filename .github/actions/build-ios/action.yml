@@ -12,6 +12,5 @@ runs:
     - shell: bash
       run: flutter build ios --release --no-codesign
     - shell: bash
-      run: | # shell
-        cd build/ios/iphoneos
-        zip -r "../../../${{ inputs.filename }}" Runner.app
+      working-directory: build/ios/iphoneos
+      run: zip -r "../../../${{ inputs.filename }}" Runner.app
