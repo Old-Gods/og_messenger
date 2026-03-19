@@ -10,6 +10,6 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: |
+      run: | # shell
         flutter build appbundle --release
         mv build/app/outputs/bundle/release/app-release.aab "${{ inputs.filename }}"

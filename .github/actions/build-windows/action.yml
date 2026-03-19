@@ -10,6 +10,8 @@ runs:
   using: composite
   steps:
     - shell: powershell
-      run: flutter build windows --release
+      run: | # powershell
+        flutter build windows --release
     - shell: powershell
-      run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ inputs.filename }}
+      run: | # powershell
+        Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ${{ inputs.filename }}
