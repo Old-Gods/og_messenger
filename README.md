@@ -14,7 +14,8 @@ A serverless, cross-platform LAN messenger for private networks. Built with Flut
 - 🌐 **Serverless**: No central server required - works entirely on your local network
 - 🔍 **Auto-Discovery**: Automatically finds other devices using UDP multicast
 - 📱 **Cross-Platform**: Works on Android, iOS, macOS, Windows, and Linux
-- 🔔 **Notifications**: Get notified when messages arrive while app is in background
+- � **Encrypted**: RSA/AES hybrid encryption for end-to-end message security
+- �🔔 **Notifications**: Get notified when messages arrive while app is in background
 - 🗄️ **Message History**: Configurable retention (default 30 days)
 - ⚡ **Real-time**: Messages sync instantly across all online devices
 
@@ -63,17 +64,17 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues and solution
 ## Architecture
 
 - **State Management**: Riverpod
-- **Database**: Isar (local storage with automatic cleanup)
+- **Database**: SQLite via sqflite (local storage with automatic cleanup)
 - **Networking**: Raw UDP/TCP sockets using dart:io
+- **Security**: RSA-2048 key exchange + AES-256-GCM message encryption
 - **Notifications**: flutter_local_notifications
 
 ## Limitations
 
 - Web platform not supported (browser security restrictions)
 - Messages only delivered to online devices
-- No end-to-end encryption (designed for trusted private networks)
 - iOS requires app in foreground or VoIP background mode
 
 ## License
 
-Private project - not for public distribution.
+MIT License - see [LICENSE](LICENSE) for details.

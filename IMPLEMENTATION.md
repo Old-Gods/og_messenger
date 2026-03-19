@@ -143,11 +143,10 @@ Peer → Verify Password → Encrypt AES Key → TcpServerService → Setup → 
 - **Shared AES key**: All authenticated peers use same key (appropriate for trusted local network)
 - **Password hash only**: No plaintext password storage (cannot display in UI)
 
-1. **No Encryption**: Messages are sent in plaintext
-2. **No Authentication**: Anyone on the network can join
-3. **Broadcast Only**: All messages go to all peers
-4. **No History Sync**: New devices don't get past messages
-5. **Memory Considerations**: All messages loaded into memory
+### Current Limitations
+1. **Broadcast Only**: All messages go to all peers
+2. **No History Sync**: New devices don't get past messages
+3. **Memory Considerations**: All messages loaded into memory
 
 ## Documentation
 
