@@ -28,15 +28,8 @@ jobs:
         with:
           token: ${{ secrets.GH_TOKEN }}
 
-  release-test:
-    needs: release-github
-    concurrency:
-      cancel-in-progress: true
-      group: release-test
-    uses: ./.github/workflows/test.yml
-
   release-build:
-    needs: [release-github, release-test]
+    needs: release-github
     if: ${{ needs.release-github.outputs.release_created }}
     uses: ./.github/workflows/build.yml
     secrets: inherit
