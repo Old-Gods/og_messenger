@@ -36,6 +36,9 @@ class DatabaseService {
     final dbName = _customDatabaseName ?? AppConstants.databaseName;
     final path = join(dbPath, dbName);
 
+    print('📁 Database path: $path');
+    print('📁 Database directory: $dbPath');
+
     return await openDatabase(
       path,
       version: 4, // V4: Reply feature
