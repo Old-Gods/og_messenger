@@ -13,10 +13,13 @@ runs:
       run: flutter build macos --release
     - shell: bash
       run: | # shell
+        STAGING_DIR=$(mktemp -d)
+        cp -R "build/macos/Build/Products/Release/OG Messenger.app" "$STAGING_DIR/"
+        ln -s /Applications "$STAGING_DIR/Applications"
         hdiutil create \
           -volname "OG Messenger" \
-          -srcfolder "build/macos/Build/Products/Release/OG Messenger.app" \
+          -srcfolder "$STAGING_DIR" \
           -ov \
           -format UDZO \
           "${{ inputs.filename }}"
-
+        rm -rf "$STAGING_DIR"
