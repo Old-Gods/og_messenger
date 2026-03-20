@@ -11,7 +11,7 @@ runs:
   steps:
     - shell: bash
       id: staging
-      run: echo "STAGING_DIR"=$(mktemp -d)" >> $GITHUB_ENV
+      run: echo "STAGING_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
     - shell: bash
       run: flutter build macos --release
