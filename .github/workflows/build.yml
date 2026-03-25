@@ -22,7 +22,7 @@ env:
 
 jobs:
   build-android:
-    name: 🤖📱
+    name: 📱🤖
     runs-on: ubuntu-latest
     env:
       APK_NAME: OG-Messenger-Android-${{ inputs.version }}.apk
@@ -61,7 +61,7 @@ jobs:
       #     path: ${{ env.AAB_NAME }}
 
   build-ios:
-    name: 🍎📱
+    name: 📱🍎
     runs-on: macos-latest
     env:
       BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.zip
@@ -78,7 +78,7 @@ jobs:
           path: ${{ env.BUILD_NAME }}
 
   build-linux:
-    runs-on: 🐧
+    runs-on: 🖥🐧️
     env:
       BUILD_NAME: OG-Messenger-Linux-${{ inputs.version }}.tar.gz
     steps:
@@ -97,7 +97,7 @@ jobs:
           path: ${{ env.BUILD_NAME }}
 
   build-macos:
-    name: 🍎
+    name: 🖥🍎
     runs-on: macos-latest
     env:
       BUILD_NAME: OG-Messenger-macos-${{ inputs.version }}.dmg
@@ -114,7 +114,7 @@ jobs:
           path: ${{ env.BUILD_NAME }}
 
   build-windows:
-    name: 🏁
+    name: 🖥🏁️
     runs-on: windows-latest
     env:
       BUILD_NAME: OG-Messenger-Windows-${{ inputs.version }}.zip
