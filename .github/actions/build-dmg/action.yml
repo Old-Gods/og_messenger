@@ -10,16 +10,26 @@ runs:
   using: composite
   steps:
     - shell: bash
+      id: staging
+      run: echo "STAGING_DIR=$(mktemp -d)" >> $GITHUB_ENV
+
+    - shell: bash
       run: flutter build macos --release
+
     - shell: bash
       run: | # shell
-        STAGING_DIR=$(mktemp -d)
         cp -R "build/macos/Build/Products/Release/OG Messenger.app" "$STAGING_DIR/"
         ln -s /Applications "$STAGING_DIR/Applications"
+
+    - shell: bash
+      run: | # shell
         hdiutil create \
           -volname "OG Messenger" \
           -srcfolder "$STAGING_DIR" \
           -ov \
           -format UDZO \
           "${{ inputs.filename }}"
-        rm -rf "$STAGING_DIR"
+
+    - shell: bash
+      if: always()
+      run: rm -rf "$STAGING_DIR"

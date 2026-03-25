@@ -13,6 +13,6 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: | # shell
-        flutter build apk --${{ inputs.type }}
-        mv build/app/outputs/flutter-apk/app-${{ inputs.type }}.apk "${{ inputs.filename }}"
+      run: flutter build apk --${{ inputs.type }}
+    - shell: bash
+      run: mv build/app/outputs/flutter-apk/app-${{ inputs.type }}.apk "${{ inputs.filename }}"
