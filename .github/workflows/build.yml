@@ -78,7 +78,8 @@ jobs:
           path: ${{ env.BUILD_NAME }}
 
   build-linux:
-    runs-on: 🖥🐧️
+    name: 🖥🐧️
+    runs-on: ubuntu-latest
     env:
       BUILD_NAME: OG-Messenger-Linux-${{ inputs.version }}.tar.gz
     steps:
