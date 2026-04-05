@@ -16,13 +16,20 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      - uses: actions/create-github-app-token@v3
+        id: auth
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PEM }}
+          permission-contents: write
+          permission-pull-requests: write
       # TODO: Move to v4 once
       # {@link https://github.com/googleapis/release-please-action/pull/1187}
       # has been merged
       - uses: googleapis/release-please-action@main
         id: release
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ steps.auth.outputs.token }}
 
   release-build:
     needs: release-github
