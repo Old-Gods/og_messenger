@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1](https://github.com/Old-Gods/og_messenger/compare/og_messenger-v1.0.0...og_messenger-v1.0.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* downgrade connectivity_plus dependency version ([d466ca7](https://github.com/Old-Gods/og_messenger/commit/d466ca798d189518574ddf4a841704721b389b16))
+* downgrade device_info_plus dependency version ([4ae8870](https://github.com/Old-Gods/og_messenger/commit/4ae887000a5240043e04f6f1e398232bcca004f1))
+* update project configuration and dependencies ([64072bd](https://github.com/Old-Gods/og_messenger/commit/64072bd493a982546731b18968edb98446a58929))
+
 ## 1.0.0 (2026-04-13)
 
 
