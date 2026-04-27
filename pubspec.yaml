@@ -32,7 +32,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   mocktail: ^1.0.0
-  build_runner: ^2.13.1
+  build_runner: ^2.14.1
   json_serializable: ^6.13.1
   flutter_launcher_icons: ^0.14.2
   sqflite_common_ffi: ^2.3.0
