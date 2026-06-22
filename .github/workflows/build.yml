@@ -28,7 +28,7 @@ jobs:
       APK_NAME: OG-Messenger-Android-${{ inputs.version }}.apk
       AAB_NAME: OG-Messenger-Android-${{ inputs.version }}.aab
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
           distribution: "zulu"
@@ -66,7 +66,7 @@ jobs:
     env:
       BUILD_NAME: OG-Messenger-iOS-${{ inputs.version }}.zip
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/install
       - uses: ./.github/actions/build-ios
         with:
@@ -83,7 +83,7 @@ jobs:
     env:
       BUILD_NAME: OG-Messenger-Linux-${{ inputs.version }}.tar.gz
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: | # shell
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
@@ -103,7 +103,7 @@ jobs:
     env:
       BUILD_NAME: OG-Messenger-macos-${{ inputs.version }}.dmg
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/install
       - uses: ./.github/actions/build-dmg
         with:
@@ -120,7 +120,7 @@ jobs:
     env:
       BUILD_NAME: OG-Messenger-Windows-${{ inputs.version }}.zip
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/install
       - uses: ./.github/actions/build-windows
         with:
