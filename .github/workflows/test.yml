@@ -15,6 +15,6 @@ jobs:
     name: ${{ matrix.test.name }}
     runs-on: ${{ matrix.test.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/install
       - uses: ./.github/actions/test
